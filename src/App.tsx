@@ -534,18 +534,6 @@ export default function HoseQuoteApp() {
           <SupplierAuth
             suppliers={suppliers}
             onLogin={(id) => setSession(id)}
-            onSignup={async (data) => {
-              const row = { company_name: data.companyName, passcode: data.passcode, service_area: data.serviceArea, contact_email: data.contactEmail, contact_phone: data.contactPhone };
-              const { data: inserted } = await supabase.from("suppliers").insert(row).select();
-              if (inserted && inserted[0]) {
-                const newSupplier = supplierFromRow(inserted[0]);
-                const pricingRow = { supplier_id: newSupplier.id, ...pricingToRow(defaultPricing(1)) };
-                await supabase.from("supplier_pricing").insert(pricingRow);
-                setSuppliers((s) => [...s, newSupplier]);
-                setPricingBySupplier((p) => ({ ...p, [newSupplier.id]: pricingFromRow(pricingRow) }));
-                setSession(newSupplier.id);
-              }
-            }}
           />
         )}
         {view === "supplier" && session && currentSupplier && (
@@ -1401,23 +1389,16 @@ function BookingFlow({ suppliers, pricingBySupplier, requests, quotes, onSubmitB
   );
 }
 
-function SupplierAuth({ suppliers, onLogin, onSignup }) {
-  const [mode, setMode] = useState("login");
+function SupplierAuth({ suppliers, onLogin }) {
   const [selectedId, setSelectedId] = useState(suppliers[0]?.id || "");
   const [passcode, setPasscode] = useState("");
   const [error, setError] = useState("");
-  const [signupData, setSignupData] = useState({ companyName: "", passcode: "", serviceArea: "", contactEmail: "", contactPhone: "" });
 
   const doLogin = () => {
     const s = suppliers.find((sp) => sp.id === selectedId);
     if (!s) { setError("Select a company."); return; }
     if (s.passcode !== passcode) { setError("Incorrect passcode."); return; }
     onLogin(s.id);
-  };
-
-  const doSignup = () => {
-    if (!signupData.companyName || !signupData.passcode) { setError("Company name and passcode are required."); return; }
-    onSignup(signupData);
   };
 
   return (
@@ -1430,45 +1411,16 @@ function SupplierAuth({ suppliers, onLogin, onSignup }) {
         <p className="text-neutral-400 text-sm">Manage your quotes and pricing.</p>
       </div>
 
-      <div className="flex gap-1 bg-neutral-900 rounded-lg p-1 mb-6">
-        <button onClick={() => { setMode("login"); setError(""); }} className={`flex-1 py-2 rounded-md font-semibold text-sm transition-colors ${mode === "login" ? "bg-orange-500 text-black" : "text-neutral-400"}`}>Log in</button>
-        <button onClick={() => { setMode("signup"); setError(""); }} className={`flex-1 py-2 rounded-md font-semibold text-sm transition-colors ${mode === "signup" ? "bg-orange-500 text-black" : "text-neutral-400"}`}>Sign up</button>
-      </div>
-
       <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6">
-        {mode === "login" ? (
-          <>
-            <Field label="Company" required>
-              <select className={inputClass()} value={selectedId} onChange={(e) => setSelectedId(e.target.value)}>
-                {suppliers.map((s) => <option className="bg-neutral-900 text-white" key={s.id} value={s.id}>{s.companyName}</option>)}
-              </select>
-            </Field>
-            <Field label="Passcode" required error={error}>
-              <input type="password" className={inputClass(error)} value={passcode} onChange={(e) => setPasscode(e.target.value)} />
-            </Field>
-            <button onClick={doLogin} className="w-full bg-orange-500 hover:bg-orange-600 text-black font-bold py-3 rounded-lg transition-colors">Log in</button>
-            <p className="text-xs text-neutral-500 mt-4 text-center">Demo logins: Coastal Hydraulics Co / demo123 · Rapid Hose Solutions / demo456</p>
-          </>
-        ) : (
-          <>
-            <Field label="Company Name" required>
-              <input className={inputClass()} value={signupData.companyName} onChange={(e) => setSignupData((d) => ({ ...d, companyName: e.target.value }))} />
-            </Field>
-            <Field label="Choose a Passcode" required error={error}>
-              <input type="password" className={inputClass(error)} value={signupData.passcode} onChange={(e) => setSignupData((d) => ({ ...d, passcode: e.target.value }))} />
-            </Field>
-            <Field label="Service Area" hint="Suburb, region, or leave blank to cover all areas">
-              <input className={inputClass()} value={signupData.serviceArea} onChange={(e) => setSignupData((d) => ({ ...d, serviceArea: e.target.value }))} />
-            </Field>
-            <Field label="Contact Email">
-              <input className={inputClass()} value={signupData.contactEmail} onChange={(e) => setSignupData((d) => ({ ...d, contactEmail: e.target.value }))} />
-            </Field>
-            <Field label="Contact Phone">
-              <input className={inputClass()} value={signupData.contactPhone} onChange={(e) => setSignupData((d) => ({ ...d, contactPhone: e.target.value }))} />
-            </Field>
-            <button onClick={doSignup} className="w-full bg-orange-500 hover:bg-orange-600 text-black font-bold py-3 rounded-lg transition-colors">Create account</button>
-          </>
-        )}
+        <Field label="Company" required>
+          <select className={inputClass()} value={selectedId} onChange={(e) => setSelectedId(e.target.value)}>
+            {suppliers.map((s) => <option className="bg-neutral-900 text-white" key={s.id} value={s.id}>{s.companyName}</option>)}
+          </select>
+        </Field>
+        <Field label="Passcode" required error={error}>
+          <input type="password" className={inputClass(error)} value={passcode} onChange={(e) => setPasscode(e.target.value)} />
+        </Field>
+        <button onClick={doLogin} className="w-full bg-orange-500 hover:bg-orange-600 text-black font-bold py-3 rounded-lg transition-colors">Log in</button>
       </div>
     </div>
   );
