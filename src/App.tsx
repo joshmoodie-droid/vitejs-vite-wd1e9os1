@@ -373,6 +373,21 @@ export default function HoseQuoteApp() {
     setQuotes((qs) => qs.map((q) => (q.id === quoteId ? { ...q, ...overrides, status: "confirmed" } : q)));
   };
 
+  // Admin-only: adjust pricing on an already-active (confirmed/accepted) job without
+  // touching its status — unlike confirmQuote, which is specifically the pending->confirmed step.
+  const editQuote = async (quoteId, overrides) => {
+    const row = {};
+    if (overrides.priceLow !== undefined) row.price_low = overrides.priceLow;
+    if (overrides.priceHigh !== undefined) row.price_high = overrides.priceHigh;
+    if (overrides.leadTimeDays !== undefined) row.lead_time_days = overrides.leadTimeDays;
+    if (overrides.fieldService !== undefined) row.field_service = overrides.fieldService;
+    if (overrides.calloutFee !== undefined) row.callout_fee = overrides.calloutFee;
+    if (overrides.travelCharge !== undefined) row.travel_charge = overrides.travelCharge;
+    if (overrides.labour !== undefined) row.labour = overrides.labour;
+    await supabase.from("quotes").update(row).eq("id", quoteId);
+    setQuotes((qs) => qs.map((q) => (q.id === quoteId ? { ...q, ...overrides } : q)));
+  };
+
   const rejectQuote = async (quoteId) => {
     await supabase.from("quotes").update({ status: "rejected" }).eq("id", quoteId);
     setQuotes((qs) => qs.map((q) => (q.id === quoteId ? { ...q, status: "rejected" } : q)));
@@ -602,6 +617,7 @@ export default function HoseQuoteApp() {
             onRejectQuote={rejectQuote}
             onUpdateFieldService={updateFieldService}
             onMarkComplete={markComplete}
+            onEditQuote={editQuote}
             onAddSupplier={addSupplier}
             onUpdateSupplier={updateSupplier}
             onDeleteSupplier={deleteSupplier}
@@ -1656,7 +1672,7 @@ function SupplierPortal({ supplier, onLogout, requests, quotes, connections, pri
 
 function AdminPortal({
   onLogout, suppliers, pricingBySupplier, requests, quotes, connections,
-  onSavePricing, onSubmitManualQuote, onUnlock, onConfirmQuote, onRejectQuote, onUpdateFieldService, onMarkComplete,
+  onSavePricing, onSubmitManualQuote, onUnlock, onConfirmQuote, onRejectQuote, onUpdateFieldService, onMarkComplete, onEditQuote,
   onAddSupplier, onUpdateSupplier, onDeleteSupplier,
 }) {
   const [tab, setTab] = useState("jobs");
@@ -1773,6 +1789,7 @@ function AdminPortal({
                       q={q} req={req} unlocked={conn?.unlocked}
                       pricing={pricingBySupplier[q.supplierId]} onConfirmQuote={onConfirmQuote} onRejectQuote={onRejectQuote}
                       onUpdateFieldService={onUpdateFieldService} onUnlock={onUnlock} onMarkComplete={onMarkComplete}
+                      onEditQuote={onEditQuote}
                     />
                   </div>
                 );
@@ -1923,9 +1940,13 @@ function AdminAddSupplierForm({ onAdd, onDone }) {
   );
 }
 
-function JobQuoteCard({ q, req, unlocked, pricing, onConfirmQuote, onRejectQuote, onUpdateFieldService, onUnlock, onMarkComplete }) {
+function JobQuoteCard({ q, req, unlocked, pricing, onConfirmQuote, onRejectQuote, onUpdateFieldService, onUnlock, onMarkComplete, onEditQuote }) {
+  const [editing, setEditing] = useState(false);
   const isCompleted = q.status === "completed";
   const isAccepted = q.status === "accepted" || isCompleted;
+  // A job can be marked complete once it's confirmed, even if the customer never
+  // explicitly clicked "Accept" — don't make completion depend on that extra step.
+  const canComplete = (q.status === "confirmed" || q.status === "accepted") && !isCompleted;
 
   return (
     <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-4">
@@ -1987,22 +2008,32 @@ function JobQuoteCard({ q, req, unlocked, pricing, onConfirmQuote, onRejectQuote
       )}
 
       {isAccepted && !isCompleted && (
-        <>
-          {unlocked ? (
-            <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3 text-sm mt-3">
-              <div className="flex items-center gap-1.5 text-emerald-400 font-semibold mb-1"><Unlock className="w-3.5 h-3.5" /> Contact unlocked</div>
-              <div className="text-white">{req?.name}</div>
-              <div className="text-neutral-400">{req?.phone} {req?.phone && req?.email && "·"} {req?.email}</div>
-            </div>
-          ) : (
-            <button onClick={() => onUnlock(q.id)} className="w-full flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 text-black font-bold py-2.5 rounded-lg transition-colors mt-3">
-              <Lock className="w-4 h-4" /> Unlock Contact Details
-            </button>
-          )}
-          <button onClick={() => onMarkComplete(q.id)} className="w-full flex items-center justify-center gap-2 border border-emerald-500/40 hover:bg-emerald-500/10 text-emerald-400 font-bold py-2.5 rounded-lg transition-colors mt-2">
-            <CheckCircle2 className="w-4 h-4" /> Mark as complete
+        unlocked ? (
+          <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3 text-sm mt-3">
+            <div className="flex items-center gap-1.5 text-emerald-400 font-semibold mb-1"><Unlock className="w-3.5 h-3.5" /> Contact unlocked</div>
+            <div className="text-white">{req?.name}</div>
+            <div className="text-neutral-400">{req?.phone} {req?.phone && req?.email && "·"} {req?.email}</div>
+          </div>
+        ) : (
+          <button onClick={() => onUnlock(q.id)} className="w-full flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 text-black font-bold py-2.5 rounded-lg transition-colors mt-3">
+            <Lock className="w-4 h-4" /> Unlock Contact Details
           </button>
-        </>
+        )
+      )}
+
+      {canComplete && (
+        <button onClick={() => onMarkComplete(q.id)} className="w-full flex items-center justify-center gap-2 border border-emerald-500/40 hover:bg-emerald-500/10 text-emerald-400 font-bold py-2.5 rounded-lg transition-colors mt-2">
+          <CheckCircle2 className="w-4 h-4" /> Mark as complete
+        </button>
+      )}
+
+      {onEditQuote && !isCompleted && (
+        <div className="mt-2">
+          <button onClick={() => setEditing((e) => !e)} className="w-full flex items-center justify-center gap-2 border border-neutral-700 hover:border-orange-500 hover:text-white text-neutral-300 font-semibold py-2.5 rounded-lg text-sm transition-colors">
+            <Settings className="w-3.5 h-3.5" /> {editing ? "Hide pricing editor" : "Edit pricing (Admin)"}
+          </button>
+          {editing && <ActiveQuoteEditor quote={q} onSave={(overrides) => { onEditQuote(q.id, overrides); setEditing(false); }} />}
+        </div>
       )}
 
       {isCompleted && (
@@ -2010,6 +2041,69 @@ function JobQuoteCard({ q, req, unlocked, pricing, onConfirmQuote, onRejectQuote
           Completed {q.completedAt ? new Date(q.completedAt).toLocaleDateString() : ""}
         </div>
       )}
+    </div>
+  );
+}
+
+function ActiveQuoteEditor({ quote, onSave }) {
+  const [priceLow, setPriceLow] = useState(quote.priceLow ?? 0);
+  const [priceHigh, setPriceHigh] = useState(quote.priceHigh ?? 0);
+  const [leadTime, setLeadTime] = useState(quote.leadTimeDays ?? 3);
+  const [calloutFee, setCalloutFee] = useState(quote.calloutFee ?? quote.fieldService?.calloutFee ?? 65);
+  const [travelCharge, setTravelCharge] = useState(quote.travelCharge ?? quote.fieldService?.travelCharge ?? 45);
+  const [labour, setLabour] = useState(quote.labour ?? quote.fieldService?.labour ?? 0);
+
+  const showOnSiteFields = quote.isBooking || (quote.fieldService && quote.fieldService.requested);
+
+  const save = () => {
+    const overrides = {
+      priceLow: parseFloat(priceLow) || 0,
+      priceHigh: parseFloat(priceHigh) || 0,
+      leadTimeDays: parseInt(leadTime) || 1,
+    };
+    if (quote.isBooking) {
+      overrides.calloutFee = parseFloat(calloutFee) || 0;
+      overrides.travelCharge = parseFloat(travelCharge) || 0;
+      overrides.labour = parseFloat(labour) || 0;
+    } else if (quote.fieldService && quote.fieldService.requested) {
+      overrides.fieldService = { ...quote.fieldService, calloutFee: parseFloat(calloutFee) || 0, travelCharge: parseFloat(travelCharge) || 0, labour: parseFloat(labour) || 0 };
+    }
+    onSave(overrides);
+  };
+
+  return (
+    <div className="border border-orange-500/30 bg-orange-500/5 rounded-lg p-3 mt-2 space-y-3">
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="text-xs text-neutral-500 block mb-1">{quote.isBooking ? "Total low $" : "Hose low $"}</label>
+          <input type="number" className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-2 py-2 text-white text-sm" value={priceLow} onChange={(e) => setPriceLow(e.target.value)} />
+        </div>
+        <div>
+          <label className="text-xs text-neutral-500 block mb-1">{quote.isBooking ? "Total high $" : "Hose high $"}</label>
+          <input type="number" className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-2 py-2 text-white text-sm" value={priceHigh} onChange={(e) => setPriceHigh(e.target.value)} />
+        </div>
+      </div>
+      {showOnSiteFields && (
+        <div className="grid grid-cols-3 gap-2">
+          <div>
+            <label className="text-xs text-neutral-500 block mb-1">Callout $</label>
+            <input type="number" className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-2 py-2 text-white text-sm" value={calloutFee} onChange={(e) => setCalloutFee(e.target.value)} />
+          </div>
+          <div>
+            <label className="text-xs text-neutral-500 block mb-1">Travel $</label>
+            <input type="number" className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-2 py-2 text-white text-sm" value={travelCharge} onChange={(e) => setTravelCharge(e.target.value)} />
+          </div>
+          <div>
+            <label className="text-xs text-neutral-500 block mb-1">Labour $</label>
+            <input type="number" className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-2 py-2 text-white text-sm" value={labour} onChange={(e) => setLabour(e.target.value)} />
+          </div>
+        </div>
+      )}
+      <div>
+        <label className="text-xs text-neutral-500 block mb-1">Lead time (days)</label>
+        <input type="number" className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-2 py-2 text-white text-sm" value={leadTime} onChange={(e) => setLeadTime(e.target.value)} />
+      </div>
+      <button onClick={save} className="w-full bg-orange-500 hover:bg-orange-600 text-black font-bold py-2 rounded-lg text-sm transition-colors">Save changes</button>
     </div>
   );
 }
