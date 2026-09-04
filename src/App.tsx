@@ -33,6 +33,10 @@ const URGENCY = [
 const EQUIPMENT_TYPES = ["Excavator", "Skid Steer / Loader", "Forklift", "Truck / Trailer", "Agricultural Equipment", "Pressure Washer", "Stationary Machinery", "Other"];
 const JOB_ISSUES = ["Hose burst / failure", "Leak", "Fitting failure", "New installation", "Routine service / inspection", "Other"];
 
+// Admin passcode — separate from any supplier account, gives full access across all suppliers.
+// Same client-side-checked model as supplier passcodes (see SupplierAuth) — change this any time.
+const ADMIN_PASSCODE = "hqadmin2026";
+
 function defaultPricing(scale = 1) {
   const hose = {};
   ["hydraulic_oil", "pressure_washer"].forEach((cat) => {
@@ -204,6 +208,7 @@ export default function HoseQuoteApp() {
   const [quotes, setQuotes] = useState([]);
   const [connections, setConnections] = useState([]);
   const [session, setSession] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const [step, setStep] = useState(1);
   const [form, setForm] = useState(emptyForm());
@@ -360,6 +365,9 @@ export default function HoseQuoteApp() {
     if (overrides.priceHigh !== undefined) row.price_high = overrides.priceHigh;
     if (overrides.leadTimeDays !== undefined) row.lead_time_days = overrides.leadTimeDays;
     if (overrides.fieldService !== undefined) row.field_service = overrides.fieldService;
+    if (overrides.calloutFee !== undefined) row.callout_fee = overrides.calloutFee;
+    if (overrides.travelCharge !== undefined) row.travel_charge = overrides.travelCharge;
+    if (overrides.labour !== undefined) row.labour = overrides.labour;
     row.status = "confirmed";
     await supabase.from("quotes").update(row).eq("id", quoteId);
     setQuotes((qs) => qs.map((q) => (q.id === quoteId ? { ...q, ...overrides, status: "confirmed" } : q)));
@@ -439,6 +447,48 @@ export default function HoseQuoteApp() {
     const now = new Date().toISOString();
     await supabase.from("quotes").update({ status: "completed", completed_at: now }).eq("id", quoteId);
     setQuotes((qs) => qs.map((q) => (q.id === quoteId ? { ...q, status: "completed", completedAt: now } : q)));
+  };
+
+  const savePricingFor = async (supplierId, next) => {
+    await supabase.from("supplier_pricing").update(pricingToRow(next)).eq("supplier_id", supplierId);
+    setPricingBySupplier((p) => ({ ...p, [supplierId]: next }));
+  };
+
+  const submitManualQuote = async (requestId, supplierId, priceLow, priceHigh, leadTimeDays) => {
+    const id = `Q-${Date.now()}`;
+    const row = { id, request_id: requestId, supplier_id: supplierId, price_low: priceLow, price_high: priceHigh, lead_time_days: leadTimeDays, quote_type: "manual", status: "confirmed" };
+    await supabase.from("quotes").insert(row);
+    setQuotes((q) => [quoteFromRow({ ...row, created_at: new Date().toISOString() }), ...q]);
+  };
+
+  // ---- Admin: supplier account management ----
+  const addSupplier = async (companyName, passcode, serviceArea, contactEmail, contactPhone) => {
+    const row = { company_name: companyName, passcode, service_area: serviceArea || "", contact_email: contactEmail || null, contact_phone: contactPhone || null };
+    const { data: inserted } = await supabase.from("suppliers").insert([row]).select();
+    const newSupplier = (inserted || []).map(supplierFromRow)[0];
+    if (newSupplier) {
+      setSuppliers((s) => [...s, newSupplier]);
+      const pricingRow = { supplier_id: newSupplier.id, ...pricingToRow(defaultPricing(1)) };
+      await supabase.from("supplier_pricing").insert([pricingRow]);
+      setPricingBySupplier((p) => ({ ...p, [newSupplier.id]: defaultPricing(1) }));
+    }
+    return newSupplier;
+  };
+
+  const updateSupplier = async (supplierId, fields) => {
+    const row = {};
+    if (fields.companyName !== undefined) row.company_name = fields.companyName;
+    if (fields.passcode !== undefined) row.passcode = fields.passcode;
+    if (fields.serviceArea !== undefined) row.service_area = fields.serviceArea;
+    if (fields.contactEmail !== undefined) row.contact_email = fields.contactEmail;
+    if (fields.contactPhone !== undefined) row.contact_phone = fields.contactPhone;
+    await supabase.from("suppliers").update(row).eq("id", supplierId);
+    setSuppliers((ss) => ss.map((s) => (s.id === supplierId ? { ...s, ...fields } : s)));
+  };
+
+  const deleteSupplier = async (supplierId) => {
+    await supabase.from("suppliers").delete().eq("id", supplierId);
+    setSuppliers((ss) => ss.filter((s) => s.id !== supplierId));
   };
 
   if (loading) {
@@ -530,13 +580,34 @@ export default function HoseQuoteApp() {
             submittedRequestId={bookingSubmittedRequestId} setSubmittedRequestId={setBookingSubmittedRequestId}
           />
         )}
-        {view === "supplier" && !session && (
+        {view === "supplier" && !session && !isAdmin && (
           <SupplierAuth
             suppliers={suppliers}
             onLogin={(id) => setSession(id)}
+            onAdminLogin={() => setIsAdmin(true)}
           />
         )}
-        {view === "supplier" && session && currentSupplier && (
+        {view === "supplier" && isAdmin && (
+          <AdminPortal
+            onLogout={() => setIsAdmin(false)}
+            suppliers={suppliers}
+            pricingBySupplier={pricingBySupplier}
+            requests={requests}
+            quotes={quotes}
+            connections={connections}
+            onSavePricing={savePricingFor}
+            onSubmitManualQuote={submitManualQuote}
+            onUnlock={unlockContact}
+            onConfirmQuote={confirmQuote}
+            onRejectQuote={rejectQuote}
+            onUpdateFieldService={updateFieldService}
+            onMarkComplete={markComplete}
+            onAddSupplier={addSupplier}
+            onUpdateSupplier={updateSupplier}
+            onDeleteSupplier={deleteSupplier}
+          />
+        )}
+        {view === "supplier" && !isAdmin && session && currentSupplier && (
           <SupplierPortal
             supplier={currentSupplier}
             onLogout={() => setSession(null)}
@@ -544,16 +615,8 @@ export default function HoseQuoteApp() {
             quotes={quotes}
             connections={connections}
             pricing={pricingBySupplier[session]}
-            onSavePricing={async (next) => {
-              await supabase.from("supplier_pricing").update(pricingToRow(next)).eq("supplier_id", session);
-              setPricingBySupplier((p) => ({ ...p, [session]: next }));
-            }}
-            onSubmitManualQuote={async (requestId, priceLow, priceHigh, leadTimeDays) => {
-              const id = `Q-${Date.now()}`;
-              const row = { id, request_id: requestId, supplier_id: session, price_low: priceLow, price_high: priceHigh, lead_time_days: leadTimeDays, quote_type: "manual", status: "confirmed" };
-              await supabase.from("quotes").insert(row);
-              setQuotes((q) => [quoteFromRow({ ...row, created_at: new Date().toISOString() }), ...q]);
-            }}
+            onSavePricing={(next) => savePricingFor(session, next)}
+            onSubmitManualQuote={(requestId, priceLow, priceHigh, leadTimeDays) => submitManualQuote(requestId, session, priceLow, priceHigh, leadTimeDays)}
             onUnlock={unlockContact}
             onConfirmQuote={confirmQuote}
             onRejectQuote={rejectQuote}
@@ -1389,16 +1452,24 @@ function BookingFlow({ suppliers, pricingBySupplier, requests, quotes, onSubmitB
   );
 }
 
-function SupplierAuth({ suppliers, onLogin }) {
+function SupplierAuth({ suppliers, onLogin, onAdminLogin }) {
+  const [mode, setMode] = useState("supplier"); // "supplier" | "admin"
   const [selectedId, setSelectedId] = useState(suppliers[0]?.id || "");
   const [passcode, setPasscode] = useState("");
+  const [adminPasscode, setAdminPasscode] = useState("");
   const [error, setError] = useState("");
+  const [adminError, setAdminError] = useState("");
 
   const doLogin = () => {
     const s = suppliers.find((sp) => sp.id === selectedId);
     if (!s) { setError("Select a company."); return; }
     if (s.passcode !== passcode) { setError("Incorrect passcode."); return; }
     onLogin(s.id);
+  };
+
+  const doAdminLogin = () => {
+    if (adminPasscode !== ADMIN_PASSCODE) { setAdminError("Incorrect passcode."); return; }
+    onAdminLogin();
   };
 
   return (
@@ -1411,17 +1482,35 @@ function SupplierAuth({ suppliers, onLogin }) {
         <p className="text-neutral-400 text-sm">Manage your quotes and pricing.</p>
       </div>
 
-      <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6">
-        <Field label="Company" required>
-          <select className={inputClass()} value={selectedId} onChange={(e) => setSelectedId(e.target.value)}>
-            {suppliers.map((s) => <option className="bg-neutral-900 text-white" key={s.id} value={s.id}>{s.companyName}</option>)}
-          </select>
-        </Field>
-        <Field label="Passcode" required error={error}>
-          <input type="password" className={inputClass(error)} value={passcode} onChange={(e) => setPasscode(e.target.value)} />
-        </Field>
-        <button onClick={doLogin} className="w-full bg-orange-500 hover:bg-orange-600 text-black font-bold py-3 rounded-lg transition-colors">Log in</button>
+      <div className="flex gap-1 bg-neutral-900 rounded-lg p-1 mb-4">
+        {[{ key: "supplier", label: "Supplier" }, { key: "admin", label: "Admin" }].map((m) => (
+          <button key={m.key} onClick={() => setMode(m.key)}
+            className={`flex-1 py-2 rounded-md font-semibold text-sm transition-colors ${mode === m.key ? "bg-orange-500 text-black" : "text-neutral-400"}`}>
+            {m.label}
+          </button>
+        ))}
       </div>
+
+      {mode === "supplier" ? (
+        <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6">
+          <Field label="Company" required>
+            <select className={inputClass()} value={selectedId} onChange={(e) => setSelectedId(e.target.value)}>
+              {suppliers.map((s) => <option className="bg-neutral-900 text-white" key={s.id} value={s.id}>{s.companyName}</option>)}
+            </select>
+          </Field>
+          <Field label="Passcode" required error={error}>
+            <input type="password" className={inputClass(error)} value={passcode} onChange={(e) => setPasscode(e.target.value)} />
+          </Field>
+          <button onClick={doLogin} className="w-full bg-orange-500 hover:bg-orange-600 text-black font-bold py-3 rounded-lg transition-colors">Log in</button>
+        </div>
+      ) : (
+        <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6">
+          <Field label="Admin Passcode" required error={adminError}>
+            <input type="password" className={inputClass(adminError)} value={adminPasscode} onChange={(e) => setAdminPasscode(e.target.value)} />
+          </Field>
+          <button onClick={doAdminLogin} className="w-full bg-orange-500 hover:bg-orange-600 text-black font-bold py-3 rounded-lg transition-colors">Log in as Admin</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -1430,16 +1519,26 @@ function SupplierAuth({ suppliers, onLogin }) {
 
 function SupplierPortal({ supplier, onLogout, requests, quotes, connections, pricing, onSavePricing, onSubmitManualQuote, onUnlock, onConfirmQuote, onRejectQuote, onUpdateFieldService, onMarkComplete }) {
   const [tab, setTab] = useState("jobs");
+  const [jobType, setJobType] = useState("quotes"); // "quotes" = hose assembly, "field" = field service jobs
   const [stage, setStage] = useState("new");
   const myQuotes = quotes.filter((q) => q.supplierId === supplier.id);
   const matchingRequests = requests.filter((r) => r.selectedSupplierId === supplier.id);
 
-  const requestsNeedingAction = matchingRequests.filter((r) => {
-    const q = myQuotes.find((mq) => mq.requestId === r.id);
+  const isFieldJob = (r) => r.requestType === "booking";
+  const requestsForType = matchingRequests.filter((r) => (jobType === "field" ? isFieldJob(r) : !isFieldJob(r)));
+  const myQuotesForType = myQuotes.filter((q) => (jobType === "field" ? q.isBooking : !q.isBooking));
+
+  const requestsNeedingAction = requestsForType.filter((r) => {
+    const q = myQuotesForType.find((mq) => mq.requestId === r.id);
     return !q || (q.status === "pending" && q.quoteType === "auto");
   });
-  const activeQuotes = myQuotes.filter((q) => q.status === "confirmed" || q.status === "accepted");
-  const completedQuotes = myQuotes.filter((q) => q.status === "completed");
+  const activeQuotes = myQuotesForType.filter((q) => q.status === "confirmed" || q.status === "accepted");
+  const completedQuotes = myQuotesForType.filter((q) => q.status === "completed");
+
+  const JOB_TYPES = [
+    { key: "quotes", label: "Hose Assembly Quotes" },
+    { key: "field", label: "Field Service Jobs" },
+  ];
 
   const STAGES = [
     { key: "new", label: "New Requests", count: requestsNeedingAction.length },
@@ -1472,6 +1571,14 @@ function SupplierPortal({ supplier, onLogout, requests, quotes, connections, pri
 
       {tab === "jobs" && (
         <div>
+          <div className="flex gap-1 bg-neutral-900 rounded-lg p-1 mb-3">
+            {JOB_TYPES.map((jt) => (
+              <button key={jt.key} onClick={() => { setJobType(jt.key); setStage("new"); }}
+                className={`flex-1 py-2.5 rounded-md font-semibold text-xs transition-colors ${jobType === jt.key ? "bg-orange-500 text-black" : "text-neutral-400"}`}>
+                {jt.label}
+              </button>
+            ))}
+          </div>
           <div className="flex gap-1 bg-neutral-900 rounded-lg p-1 mb-4">
             {STAGES.map((s) => (
               <button key={s.key} onClick={() => setStage(s.key)}
@@ -1490,7 +1597,7 @@ function SupplierPortal({ supplier, onLogout, requests, quotes, connections, pri
                 </div>
               )}
               {requestsNeedingAction.map((r) => {
-                const q = myQuotes.find((mq) => mq.requestId === r.id) || null;
+                const q = myQuotesForType.find((mq) => mq.requestId === r.id) || null;
                 return (
                   <RequestCard key={r.id} r={r} myQuote={q} pricing={pricing} onSubmitManualQuote={onSubmitManualQuote} onConfirmQuote={onConfirmQuote} onRejectQuote={onRejectQuote} />
                 );
@@ -1543,6 +1650,275 @@ function SupplierPortal({ supplier, onLogout, requests, quotes, connections, pri
       )}
 
       {tab === "pricing" && <PricingAdmin pricing={pricing} onSave={onSavePricing} />}
+    </div>
+  );
+}
+
+function AdminPortal({
+  onLogout, suppliers, pricingBySupplier, requests, quotes, connections,
+  onSavePricing, onSubmitManualQuote, onUnlock, onConfirmQuote, onRejectQuote, onUpdateFieldService, onMarkComplete,
+  onAddSupplier, onUpdateSupplier, onDeleteSupplier,
+}) {
+  const [tab, setTab] = useState("jobs");
+  const [jobType, setJobType] = useState("quotes");
+  const [stage, setStage] = useState("new");
+
+  const supplierName = (id) => suppliers.find((s) => s.id === id)?.companyName || "Unknown supplier";
+  const isFieldJob = (r) => r.requestType === "booking";
+
+  const requestsForType = requests.filter((r) => (jobType === "field" ? isFieldJob(r) : !isFieldJob(r)));
+  const quotesForType = quotes.filter((q) => (jobType === "field" ? q.isBooking : !q.isBooking));
+
+  const requestsNeedingAction = requestsForType.filter((r) => {
+    const q = quotesForType.find((mq) => mq.requestId === r.id);
+    return !q || (q.status === "pending" && q.quoteType === "auto");
+  });
+  const activeQuotes = quotesForType.filter((q) => q.status === "confirmed" || q.status === "accepted");
+  const completedQuotes = quotesForType.filter((q) => q.status === "completed");
+
+  const JOB_TYPES = [
+    { key: "quotes", label: "Hose Assembly Quotes" },
+    { key: "field", label: "Field Service Jobs" },
+  ];
+  const STAGES = [
+    { key: "new", label: "New Requests", count: requestsNeedingAction.length },
+    { key: "active", label: "Active", count: activeQuotes.length },
+    { key: "completed", label: "Completed", count: completedQuotes.length },
+  ];
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-extrabold text-white">Admin</h1>
+          <p className="text-neutral-500 text-sm">Full access across all suppliers.</p>
+        </div>
+        <button onClick={onLogout} className="flex items-center gap-1.5 text-sm text-neutral-400 hover:text-white border border-neutral-700 rounded-lg px-3 py-2">
+          <LogOut className="w-3.5 h-3.5" /> Log out
+        </button>
+      </div>
+
+      <div className="flex gap-1 bg-neutral-900 rounded-lg p-1 mb-6">
+        {[
+          { key: "jobs", label: "Jobs", icon: Wrench },
+          { key: "suppliers", label: "Suppliers", icon: Building2 },
+        ].map((t) => (
+          <button key={t.key} onClick={() => setTab(t.key)} className={`flex-1 py-2 rounded-md font-semibold text-sm transition-colors flex items-center justify-center gap-1.5 ${tab === t.key ? "bg-orange-500 text-black" : "text-neutral-400"}`}>
+            <t.icon className="w-4 h-4" /> {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "jobs" && (
+        <div>
+          <div className="flex gap-1 bg-neutral-900 rounded-lg p-1 mb-3">
+            {JOB_TYPES.map((jt) => (
+              <button key={jt.key} onClick={() => { setJobType(jt.key); setStage("new"); }}
+                className={`flex-1 py-2.5 rounded-md font-semibold text-xs transition-colors ${jobType === jt.key ? "bg-orange-500 text-black" : "text-neutral-400"}`}>
+                {jt.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-1 bg-neutral-900 rounded-lg p-1 mb-4">
+            {STAGES.map((s) => (
+              <button key={s.key} onClick={() => setStage(s.key)}
+                className={`flex-1 py-2.5 rounded-md font-semibold text-xs transition-colors flex flex-col items-center gap-0.5 ${stage === s.key ? "bg-orange-500 text-black" : "text-neutral-400"}`}>
+                <span>{s.label}</span>
+                <span className={stage === s.key ? "text-black/70" : "text-neutral-600"}>{s.count}</span>
+              </button>
+            ))}
+          </div>
+
+          {stage === "new" && (
+            <div className="space-y-3">
+              {requestsNeedingAction.length === 0 && (
+                <div className="text-center py-16 text-neutral-500 border border-dashed border-neutral-800 rounded-xl">
+                  No new requests right now.
+                </div>
+              )}
+              {requestsNeedingAction.map((r) => {
+                const q = quotesForType.find((mq) => mq.requestId === r.id) || null;
+                return (
+                  <div key={r.id}>
+                    <div className="text-xs font-semibold text-neutral-500 mb-1.5 flex items-center gap-1.5">
+                      <Building2 className="w-3 h-3" /> {supplierName(r.selectedSupplierId)}
+                    </div>
+                    <RequestCard
+                      r={r} myQuote={q} pricing={pricingBySupplier[r.selectedSupplierId]}
+                      onSubmitManualQuote={(requestId, low, high, lead) => onSubmitManualQuote(requestId, r.selectedSupplierId, low, high, lead)}
+                      onConfirmQuote={onConfirmQuote} onRejectQuote={onRejectQuote}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {(stage === "active" || stage === "completed") && (
+            <div className="space-y-3">
+              {(stage === "active" ? activeQuotes : completedQuotes).length === 0 && (
+                <div className="text-center py-16 text-neutral-500 border border-dashed border-neutral-800 rounded-xl">
+                  {stage === "active" ? "Nothing active right now." : "No completed jobs yet."}
+                </div>
+              )}
+              {(stage === "active" ? activeQuotes : completedQuotes).map((q) => {
+                const req = requests.find((r) => r.id === q.requestId);
+                const conn = connections.find((c) => c.quoteId === q.id);
+                return (
+                  <div key={q.id}>
+                    <div className="text-xs font-semibold text-neutral-500 mb-1.5 flex items-center gap-1.5">
+                      <Building2 className="w-3 h-3" /> {supplierName(q.supplierId)}
+                    </div>
+                    <JobQuoteCard
+                      q={q} req={req} unlocked={conn?.unlocked}
+                      pricing={pricingBySupplier[q.supplierId]} onConfirmQuote={onConfirmQuote} onRejectQuote={onRejectQuote}
+                      onUpdateFieldService={onUpdateFieldService} onUnlock={onUnlock} onMarkComplete={onMarkComplete}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === "suppliers" && (
+        <AdminSuppliers
+          suppliers={suppliers} pricingBySupplier={pricingBySupplier}
+          onSavePricing={onSavePricing} onAddSupplier={onAddSupplier}
+          onUpdateSupplier={onUpdateSupplier} onDeleteSupplier={onDeleteSupplier}
+        />
+      )}
+    </div>
+  );
+}
+
+function AdminSuppliers({ suppliers, pricingBySupplier, onSavePricing, onAddSupplier, onUpdateSupplier, onDeleteSupplier }) {
+  const [addingOpen, setAddingOpen] = useState(false);
+
+  return (
+    <div>
+      <div className="space-y-4 mb-6">
+        {suppliers.map((s) => (
+          <AdminSupplierRow
+            key={s.id} supplier={s} pricing={pricingBySupplier[s.id]}
+            onSavePricing={(next) => onSavePricing(s.id, next)}
+            onUpdate={(fields) => onUpdateSupplier(s.id, fields)}
+            onDelete={() => onDeleteSupplier(s.id)}
+          />
+        ))}
+      </div>
+
+      {addingOpen ? (
+        <AdminAddSupplierForm onAdd={onAddSupplier} onDone={() => setAddingOpen(false)} />
+      ) : (
+        <button onClick={() => setAddingOpen(true)} className="w-full flex items-center justify-center gap-2 border border-dashed border-neutral-700 hover:border-orange-500 hover:text-white text-neutral-400 font-semibold py-3 rounded-lg transition-colors">
+          <Plus className="w-4 h-4" /> Add a supplier
+        </button>
+      )}
+    </div>
+  );
+}
+
+function AdminSupplierRow({ supplier, pricing, onSavePricing, onUpdate, onDelete }) {
+  const [companyName, setCompanyName] = useState(supplier.companyName);
+  const [passcode, setPasscode] = useState(supplier.passcode);
+  const [serviceArea, setServiceArea] = useState(supplier.serviceArea || "");
+  const [contactEmail, setContactEmail] = useState(supplier.contactEmail || "");
+  const [contactPhone, setContactPhone] = useState(supplier.contactPhone || "");
+  const [savedMsg, setSavedMsg] = useState("");
+  const [pricingOpen, setPricingOpen] = useState(false);
+
+  const save = async () => {
+    await onUpdate({ companyName, passcode, serviceArea, contactEmail, contactPhone });
+    setSavedMsg("Saved");
+    setTimeout(() => setSavedMsg(""), 1500);
+  };
+
+  const remove = () => {
+    if (window.confirm(`Remove ${supplier.companyName}? Their existing quotes and requests will stay on record but will show as an unknown supplier.`)) {
+      onDelete();
+    }
+  };
+
+  return (
+    <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5">
+      <div className="grid grid-cols-2 gap-3 mb-3">
+        <Field label="Company name">
+          <input className={inputClass()} value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
+        </Field>
+        <Field label="Passcode">
+          <input className={inputClass()} value={passcode} onChange={(e) => setPasscode(e.target.value)} />
+        </Field>
+        <Field label="Service area" hint="Blank = all areas">
+          <input className={inputClass()} value={serviceArea} onChange={(e) => setServiceArea(e.target.value)} />
+        </Field>
+        <Field label="Contact phone">
+          <input className={inputClass()} value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} />
+        </Field>
+        <Field label="Contact email">
+          <input className={inputClass()} value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} />
+        </Field>
+      </div>
+      <div className="flex items-center gap-2 flex-wrap">
+        <button onClick={save} className="bg-orange-500 hover:bg-orange-600 text-black font-bold px-4 py-2 rounded-lg text-sm transition-colors">Save</button>
+        {savedMsg && <span className="text-xs text-emerald-400 font-semibold">{savedMsg}</span>}
+        <button onClick={() => setPricingOpen((o) => !o)} className="border border-neutral-700 hover:border-orange-500 hover:text-white text-neutral-300 px-4 py-2 rounded-lg text-sm transition-colors">
+          {pricingOpen ? "Hide pricing" : "Edit pricing"}
+        </button>
+        <button onClick={remove} className="ml-auto border border-neutral-700 hover:border-red-500 hover:text-red-400 text-neutral-400 px-4 py-2 rounded-lg text-sm transition-colors">Remove</button>
+      </div>
+      {pricingOpen && (
+        <div className="mt-4 border-t border-neutral-800 pt-4">
+          <PricingAdmin pricing={pricing} onSave={onSavePricing} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AdminAddSupplierForm({ onAdd, onDone }) {
+  const [companyName, setCompanyName] = useState("");
+  const [passcode, setPasscode] = useState("");
+  const [serviceArea, setServiceArea] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
+  const [contactPhone, setContactPhone] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const submit = async () => {
+    if (!companyName || !passcode) return;
+    setSaving(true);
+    await onAdd(companyName, passcode, serviceArea, contactEmail, contactPhone);
+    setSaving(false);
+    onDone();
+  };
+
+  return (
+    <div className="bg-neutral-900 border border-orange-500/30 rounded-xl p-5">
+      <div className="text-white font-bold mb-3">New supplier</div>
+      <div className="grid grid-cols-2 gap-3 mb-3">
+        <Field label="Company name" required>
+          <input className={inputClass()} value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
+        </Field>
+        <Field label="Passcode" required>
+          <input className={inputClass()} value={passcode} onChange={(e) => setPasscode(e.target.value)} />
+        </Field>
+        <Field label="Service area" hint="Blank = all areas">
+          <input className={inputClass()} value={serviceArea} onChange={(e) => setServiceArea(e.target.value)} />
+        </Field>
+        <Field label="Contact phone">
+          <input className={inputClass()} value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} />
+        </Field>
+        <Field label="Contact email">
+          <input className={inputClass()} value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} />
+        </Field>
+      </div>
+      <div className="flex gap-2">
+        <button onClick={submit} disabled={saving || !companyName || !passcode} className="flex-1 bg-orange-500 hover:bg-orange-600 text-black font-bold py-2.5 rounded-lg transition-colors disabled:opacity-50">
+          {saving ? "Adding..." : "Add supplier"}
+        </button>
+        <button onClick={onDone} className="px-4 border border-neutral-700 text-neutral-300 rounded-lg text-sm">Cancel</button>
+      </div>
     </div>
   );
 }
@@ -1781,6 +2157,107 @@ function SupplierFieldServiceReview({ quote, pricing, onUpdate }) {
   );
 }
 
+function AutoQuoteReview({ quote, onConfirmQuote, onRejectQuote }) {
+  const [priceLow, setPriceLow] = useState(quote.priceLow ?? 0);
+  const [priceHigh, setPriceHigh] = useState(quote.priceHigh ?? 0);
+  const [leadTime, setLeadTime] = useState(quote.leadTimeDays ?? 3);
+  const [calloutFee, setCalloutFee] = useState(quote.calloutFee ?? 65);
+  const [travelCharge, setTravelCharge] = useState(quote.travelCharge ?? 45);
+  const [labourHours, setLabourHours] = useState(quote.customerLabourHours || 1);
+  const [hourlyRate, setHourlyRate] = useState(85);
+
+  if (quote.isBooking) {
+    const labour = Math.round((parseFloat(labourHours) || 0) * (parseFloat(hourlyRate) || 0));
+    const total = (parseFloat(calloutFee) || 0) + (parseFloat(travelCharge) || 0) + labour;
+    const confirm = () => {
+      onConfirmQuote(quote.id, {
+        calloutFee: parseFloat(calloutFee) || 0,
+        travelCharge: parseFloat(travelCharge) || 0,
+        labour,
+        priceLow: total,
+        priceHigh: total,
+        leadTimeDays: parseInt(leadTime) || 1,
+      });
+    };
+    return (
+      <div className="space-y-3 mt-1">
+        <div className="text-xs text-neutral-500 uppercase tracking-wide font-semibold">Review pricing before sending to customer</div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="text-xs text-neutral-500 block mb-1">Callout fee $</label>
+            <input type="number" className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-2 py-2 text-white text-sm" value={calloutFee} onChange={(e) => setCalloutFee(e.target.value)} />
+          </div>
+          <div>
+            <label className="text-xs text-neutral-500 block mb-1">Travel charge $</label>
+            <input type="number" className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-2 py-2 text-white text-sm" value={travelCharge} onChange={(e) => setTravelCharge(e.target.value)} />
+          </div>
+        </div>
+        <div className="border border-neutral-700 rounded-lg p-2.5">
+          <label className="text-xs text-neutral-500 block mb-1.5">Labour</label>
+          <div className="grid grid-cols-3 gap-2 items-end">
+            <div>
+              <label className="text-xs text-neutral-600 block mb-1">Hours</label>
+              <input type="number" step="0.5" className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-2 py-2 text-white text-sm" value={labourHours} onChange={(e) => setLabourHours(e.target.value)} />
+            </div>
+            <div>
+              <label className="text-xs text-neutral-600 block mb-1">$ / hour</label>
+              <input type="number" className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-2 py-2 text-white text-sm" value={hourlyRate} onChange={(e) => setHourlyRate(e.target.value)} />
+            </div>
+            <div className="text-center pb-2">
+              <div className="text-xs text-neutral-600 mb-1">= Labour $</div>
+              <div className="text-white font-bold">${labour}</div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <label className="text-xs text-neutral-500 block mb-1">Lead time (days)</label>
+          <input type="number" className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-2 py-2 text-white text-sm" value={leadTime} onChange={(e) => setLeadTime(e.target.value)} />
+        </div>
+        <div className="flex items-center justify-between pt-1 border-t border-neutral-800">
+          <span className="text-sm font-bold text-orange-500">Total to customer</span>
+          <span className="text-lg font-extrabold text-orange-500">${total}</span>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={confirm} className="flex-1 bg-orange-500 hover:bg-orange-600 text-black font-bold py-2.5 rounded-lg transition-colors">Confirm &amp; send to customer</button>
+          <button onClick={() => onRejectQuote(quote.id)} className="flex-1 border border-neutral-700 hover:border-red-500 hover:text-red-400 text-neutral-300 py-2.5 rounded-lg transition-colors">Reject</button>
+        </div>
+      </div>
+    );
+  }
+
+  const confirm = () => {
+    onConfirmQuote(quote.id, {
+      priceLow: parseFloat(priceLow) || 0,
+      priceHigh: parseFloat(priceHigh) || 0,
+      leadTimeDays: parseInt(leadTime) || 1,
+    });
+  };
+
+  return (
+    <div className="space-y-3 mt-1">
+      <div className="text-xs text-neutral-500 uppercase tracking-wide font-semibold">Review pricing before sending to customer</div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="text-xs text-neutral-500 block mb-1">Low $</label>
+          <input type="number" className={inputClass()} value={priceLow} onChange={(e) => setPriceLow(e.target.value)} />
+        </div>
+        <div>
+          <label className="text-xs text-neutral-500 block mb-1">High $</label>
+          <input type="number" className={inputClass()} value={priceHigh} onChange={(e) => setPriceHigh(e.target.value)} />
+        </div>
+      </div>
+      <div>
+        <label className="text-xs text-neutral-500 block mb-1">Lead time (days)</label>
+        <input type="number" className={inputClass()} value={leadTime} onChange={(e) => setLeadTime(e.target.value)} />
+      </div>
+      <div className="flex gap-2">
+        <button onClick={confirm} className="flex-1 bg-orange-500 hover:bg-orange-600 text-black font-bold py-2.5 rounded-lg transition-colors">Confirm &amp; send to customer</button>
+        <button onClick={() => onRejectQuote(quote.id)} className="flex-1 border border-neutral-700 hover:border-red-500 hover:text-red-400 text-neutral-300 py-2.5 rounded-lg transition-colors">Reject</button>
+      </div>
+    </div>
+  );
+}
+
 function RequestCard({ r, myQuote, pricing, onSubmitManualQuote, onConfirmQuote, onRejectQuote }) {
   const [showForm, setShowForm] = useState(false);
   const [low, setLow] = useState("");
@@ -1801,13 +2278,7 @@ function RequestCard({ r, myQuote, pricing, onSubmitManualQuote, onConfirmQuote,
 
       {myQuote ? (
         myQuote.status === "pending" && myQuote.quoteType === "auto" ? (
-          <div className="space-y-3 mt-1">
-            <div className="text-sm text-neutral-300">Proposed price: <span className="font-semibold text-white">${myQuote.priceLow} – ${myQuote.priceHigh}</span></div>
-            <div className="flex gap-2">
-              <button onClick={() => onConfirmQuote(myQuote.id, {})} className="flex-1 bg-orange-500 hover:bg-orange-600 text-black font-bold py-2.5 rounded-lg transition-colors">Confirm</button>
-              <button onClick={() => onRejectQuote(myQuote.id)} className="flex-1 border border-neutral-700 hover:border-red-500 hover:text-red-400 text-neutral-300 py-2.5 rounded-lg transition-colors">Reject</button>
-            </div>
-          </div>
+          <AutoQuoteReview quote={myQuote} onConfirmQuote={onConfirmQuote} onRejectQuote={onRejectQuote} />
         ) : (
           <div className="text-sm text-emerald-400 font-semibold flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4" /> Quoted: ${myQuote.priceLow} – ${myQuote.priceHigh} ({myQuote.quoteType})</div>
         )
