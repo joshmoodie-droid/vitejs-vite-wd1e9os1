@@ -1,0 +1,6 @@
+# Supabase CLI config. Run `supabase link --project-ref qwycavfmdpknnflxlylw`
+# to connect this folder to the hosted project.
+project_id = "qwycavfmdpknnflxlylw"
+
+[functions.notify]
+verify_jwt = false
