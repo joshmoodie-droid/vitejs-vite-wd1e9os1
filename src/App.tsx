@@ -284,7 +284,14 @@ export default function HoseQuoteApp() {
   // ---- customer auth wiring (Phase 2) ----
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setCustomer(data.session?.user ?? null));
-    const { data: sub } = supabase.auth.onAuthStateChange((_evt, s) => setCustomer(s?.user ?? null));
+    const { data: sub } = supabase.auth.onAuthStateChange((evt, s) => {
+      setCustomer(s?.user ?? null);
+      if (evt === "SIGNED_IN") {
+        setView("customer");
+        setFlowType(null);
+        setCustomerView("mine");
+      }
+    });
     return () => sub.subscription.unsubscribe();
   }, []);
 
@@ -633,10 +640,7 @@ export default function HoseQuoteApp() {
           />
         )}
         {view === "customer" && flowType === null && customerView === "auth" && (
-          <CustomerAuth
-            onSignedIn={() => setCustomerView("mine")}
-            onBack={() => setCustomerView("new")}
-          />
+          <CustomerAuth onBack={() => setCustomerView("new")} />
         )}
         {view === "customer" && flowType === null && customerView === "mine" && (
           customer ? (
@@ -899,36 +903,23 @@ function FlowChooser({ onChoose, customer, onSignIn, onMine }) {
   );
 }
 
-function CustomerAuth({ onSignedIn, onBack }) {
+function CustomerAuth({ onBack }) {
   const [email, setEmail] = useState("");
-  const [code, setCode] = useState("");
-  const [stage, setStage] = useState("email"); // "email" | "code"
+  const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
-  const sendCode = async () => {
+  const sendLink = async () => {
     const addr = email.trim();
     if (!addr) return;
     setErr(""); setBusy(true);
     const { error } = await supabase.auth.signInWithOtp({
       email: addr,
-      options: { shouldCreateUser: true },
+      options: { shouldCreateUser: true, emailRedirectTo: window.location.origin },
     });
     setBusy(false);
     if (error) setErr(error.message);
-    else setStage("code");
-  };
-
-  const verify = async () => {
-    setErr(""); setBusy(true);
-    const { error } = await supabase.auth.verifyOtp({
-      email: email.trim(),
-      token: code.trim(),
-      type: "email",
-    });
-    setBusy(false);
-    if (error) setErr(error.message);
-    else onSignedIn();
+    else setSent(true);
   };
 
   return (
@@ -941,12 +932,12 @@ function CustomerAuth({ onSignedIn, onBack }) {
           <User className="w-6 h-6 text-orange-500" />
         </div>
         <h1 className="text-2xl font-extrabold text-white">
-          {stage === "email" ? "Sign in" : "Enter your code"}
+          {sent ? "Check your email" : "Sign in"}
         </h1>
         <p className="text-neutral-500 text-sm mt-1">
-          {stage === "email"
-            ? "We'll email you a 6-digit code. No password needed."
-            : `We sent a code to ${email.trim()}.`}
+          {sent
+            ? `We sent a sign-in link to ${email.trim()}. Open it and you're in — no password needed.`
+            : "Enter your email and we'll send you a one-tap sign-in link."}
         </p>
       </div>
 
@@ -956,7 +947,14 @@ function CustomerAuth({ onSignedIn, onBack }) {
         </div>
       )}
 
-      {stage === "email" ? (
+      {sent ? (
+        <button
+          onClick={() => { setSent(false); setErr(""); }}
+          className="w-full text-sm text-neutral-400 hover:text-white"
+        >
+          Use a different email
+        </button>
+      ) : (
         <>
           <Field label="Email" required>
             <input
@@ -966,42 +964,15 @@ function CustomerAuth({ onSignedIn, onBack }) {
               className={inputClass()}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && sendCode()}
+              onKeyDown={(e) => e.key === "Enter" && sendLink()}
             />
           </Field>
           <button
-            onClick={sendCode}
+            onClick={sendLink}
             disabled={busy || !email.trim()}
             className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-black font-bold py-3 rounded-lg transition-colors"
           >
-            {busy ? "Sending…" : "Send code"}
-          </button>
-        </>
-      ) : (
-        <>
-          <Field label="6-digit code" required>
-            <input
-              inputMode="numeric"
-              autoFocus
-              placeholder="123456"
-              className={inputClass() + " tracking-[0.4em] text-center text-lg"}
-              value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-              onKeyDown={(e) => e.key === "Enter" && verify()}
-            />
-          </Field>
-          <button
-            onClick={verify}
-            disabled={busy || code.length < 6}
-            className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-black font-bold py-3 rounded-lg transition-colors"
-          >
-            {busy ? "Checking…" : "Verify & sign in"}
-          </button>
-          <button
-            onClick={() => { setStage("email"); setCode(""); setErr(""); }}
-            className="w-full mt-3 text-sm text-neutral-500 hover:text-white"
-          >
-            Use a different email
+            {busy ? "Sending…" : "Email me a sign-in link"}
           </button>
         </>
       )}
