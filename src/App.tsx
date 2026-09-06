@@ -210,6 +210,11 @@ export default function HoseQuoteApp() {
   const [session, setSession] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
 
+  // ---- customer accounts (Phase 2) ----
+  const [customer, setCustomer] = useState(null); // Supabase auth user
+  const [profile, setProfile] = useState(null);
+  const [customerView, setCustomerView] = useState("new"); // "new" | "auth" | "mine"
+
   const [step, setStep] = useState(1);
   const [form, setForm] = useState(emptyForm());
   const [errors, setErrors] = useState({});
@@ -276,6 +281,52 @@ export default function HoseQuoteApp() {
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
+  // ---- customer auth wiring (Phase 2) ----
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setCustomer(data.session?.user ?? null));
+    const { data: sub } = supabase.auth.onAuthStateChange((_evt, s) => setCustomer(s?.user ?? null));
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  // load the signed-in customer's profile, and link any past anonymous
+  // requests that used their (now verified) email address
+  useEffect(() => {
+    if (!customer) { setProfile(null); return; }
+    let cancelled = false;
+    (async () => {
+      const { data: prof } = await supabase.from("profiles").select("*").eq("id", customer.id).single();
+      if (!cancelled) setProfile(prof || { id: customer.id, email: customer.email });
+      if (customer.email) {
+        const { data: claimed } = await supabase
+          .from("requests")
+          .update({ customer_id: customer.id })
+          .is("customer_id", null)
+          .ilike("email", customer.email)
+          .select("id");
+        if (claimed?.length) loadAll();
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [customer, loadAll]);
+
+  // prefill contact fields from the profile (only while still blank)
+  useEffect(() => {
+    if (!profile) return;
+    const fill = (f) => ({
+      ...f,
+      name: f.name || profile.full_name || "",
+      phone: f.phone || profile.phone || "",
+      email: f.email || profile.email || "",
+    });
+    setForm(fill);
+    setBookingForm(fill);
+  }, [profile]);
+
+  const signOut = async () => {
+    await supabase.auth.signOut();
+    setCustomerView("new");
+  };
+
   function pricingToRow(p) {
     return { hose: p.hose, fitting: p.fitting, labour_base: p.labourBase, crimp_charge: p.crimpCharge, travel_base: p.travelBase, callout_fee: p.calloutFee, labour_hourly_rate: p.labourHourlyRate };
   }
@@ -324,6 +375,7 @@ export default function HoseQuoteApp() {
     const id = `HQ-${Date.now()}`;
     const row = {
       id, request_type: "quote", status: "open", selected_supplier_id: form.selectedSupplierId,
+      customer_id: customer?.id ?? null,
       urgency: form.urgency, location: form.location, field_service_requested: form.fieldServiceRequested,
       site_address: form.siteAddress, access_notes: form.accessNotes, fs_labour_hours_estimate: form.fsLabourHoursEstimate,
       name: form.name, phone: form.phone, email: form.email, preferred_time: form.preferredTime,
@@ -526,6 +578,31 @@ export default function HoseQuoteApp() {
             </div>
             <div className="text-white font-extrabold leading-none">HoseQuote</div>
           </div>
+          <div className="flex items-center gap-3">
+            {view === "customer" && (
+              <div className="flex items-center gap-2 text-sm">
+                {customer ? (
+                  <>
+                    <button
+                      onClick={() => { setFlowType(null); setCustomerView("mine"); }}
+                      className="text-neutral-300 hover:text-white font-semibold"
+                    >
+                      My requests
+                    </button>
+                    <button onClick={signOut} title="Sign out" aria-label="Sign out" className="text-neutral-500 hover:text-white">
+                      <LogOut className="w-4 h-4" />
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => { setFlowType(null); setCustomerView("auth"); }}
+                    className="text-orange-500 hover:text-orange-400 font-semibold"
+                  >
+                    Sign in
+                  </button>
+                )}
+              </div>
+            )}
           <nav className="flex items-center gap-1 bg-neutral-900 rounded-lg p-1">
             {[
               { key: "customer", icon: Droplet, label: "Quote" },
@@ -542,12 +619,38 @@ export default function HoseQuoteApp() {
               </button>
             ))}
           </nav>
+          </div>
         </div>
       </header>
 
       <main className="max-w-3xl mx-auto px-5 py-8">
-        {view === "customer" && flowType === null && (
-          <FlowChooser onChoose={setFlowType} />
+        {view === "customer" && flowType === null && customerView === "new" && (
+          <FlowChooser
+            onChoose={setFlowType}
+            customer={customer}
+            onSignIn={() => setCustomerView("auth")}
+            onMine={() => setCustomerView("mine")}
+          />
+        )}
+        {view === "customer" && flowType === null && customerView === "auth" && (
+          <CustomerAuth
+            onSignedIn={() => setCustomerView("mine")}
+            onBack={() => setCustomerView("new")}
+          />
+        )}
+        {view === "customer" && flowType === null && customerView === "mine" && (
+          customer ? (
+            <MyRequests
+              customerId={customer.id}
+              email={customer.email}
+              onNew={() => setCustomerView("new")}
+            />
+          ) : (
+            <CustomerAuth
+              onSignedIn={() => setCustomerView("mine")}
+              onBack={() => setCustomerView("new")}
+            />
+          )
         )}
         {view === "customer" && flowType === "quote" && (
           <CustomerFlow
@@ -568,6 +671,7 @@ export default function HoseQuoteApp() {
             onSubmitBooking={async (record, newQuote) => {
               const row = {
                 id: record.id, request_type: "booking", status: "open", location: record.location,
+                customer_id: customer?.id ?? null,
                 urgency: record.urgency, selected_supplier_id: record.selectedSupplierId,
                 name: record.name, phone: record.phone, email: record.email, preferred_time: record.preferredTime,
                 notes: record.notes, photo_url: record.photoUrl, equipment_type: record.equipmentType,
@@ -736,7 +840,7 @@ function AssemblyCard({ assembly: a, index, errors, onChange, onRemove }) {
   );
 }
 
-function FlowChooser({ onChoose }) {
+function FlowChooser({ onChoose, customer, onSignIn, onMine }) {
   return (
     <div>
       <div className="text-center mb-8">
@@ -771,6 +875,203 @@ function FlowChooser({ onChoose }) {
           <div className="text-white font-bold text-lg mb-1 group-hover:text-orange-500 transition-colors">Book a Field Service Job</div>
           <p className="text-neutral-500 text-sm">Not sure of the exact hose spec yet? Book a technician to come assess and fix it on site — describe the job and get indicative callout pricing.</p>
         </button>
+      </div>
+
+      <div className="text-center mt-6 text-sm">
+        {customer ? (
+          <p className="text-neutral-500">
+            Signed in as <span className="text-neutral-300">{customer.email}</span> ·{" "}
+            <button onClick={onMine} className="text-orange-500 hover:text-orange-400 font-semibold">
+              My requests
+            </button>
+          </p>
+        ) : (
+          <p className="text-neutral-500">
+            Been here before?{" "}
+            <button onClick={onSignIn} className="text-orange-500 hover:text-orange-400 font-semibold">
+              Sign in
+            </button>{" "}
+            to track and accept your quotes.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CustomerAuth({ onSignedIn, onBack }) {
+  const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
+  const [stage, setStage] = useState("email"); // "email" | "code"
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  const sendCode = async () => {
+    const addr = email.trim();
+    if (!addr) return;
+    setErr(""); setBusy(true);
+    const { error } = await supabase.auth.signInWithOtp({
+      email: addr,
+      options: { shouldCreateUser: true },
+    });
+    setBusy(false);
+    if (error) setErr(error.message);
+    else setStage("code");
+  };
+
+  const verify = async () => {
+    setErr(""); setBusy(true);
+    const { error } = await supabase.auth.verifyOtp({
+      email: email.trim(),
+      token: code.trim(),
+      type: "email",
+    });
+    setBusy(false);
+    if (error) setErr(error.message);
+    else onSignedIn();
+  };
+
+  return (
+    <div className="max-w-sm mx-auto">
+      <button type="button" onClick={onBack} className="flex items-center gap-1.5 text-sm text-neutral-500 hover:text-white mb-6">
+        <ArrowLeft className="w-3.5 h-3.5" /> Back
+      </button>
+      <div className="text-center mb-6">
+        <div className="w-12 h-12 rounded-lg bg-orange-500/10 border border-orange-500/40 flex items-center justify-center mx-auto mb-3">
+          <User className="w-6 h-6 text-orange-500" />
+        </div>
+        <h1 className="text-2xl font-extrabold text-white">
+          {stage === "email" ? "Sign in" : "Enter your code"}
+        </h1>
+        <p className="text-neutral-500 text-sm mt-1">
+          {stage === "email"
+            ? "We'll email you a 6-digit code. No password needed."
+            : `We sent a code to ${email.trim()}.`}
+        </p>
+      </div>
+
+      {err && (
+        <div className="mb-4 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          {err}
+        </div>
+      )}
+
+      {stage === "email" ? (
+        <>
+          <Field label="Email" required>
+            <input
+              type="email"
+              autoFocus
+              placeholder="you@example.com"
+              className={inputClass()}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && sendCode()}
+            />
+          </Field>
+          <button
+            onClick={sendCode}
+            disabled={busy || !email.trim()}
+            className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-black font-bold py-3 rounded-lg transition-colors"
+          >
+            {busy ? "Sending…" : "Send code"}
+          </button>
+        </>
+      ) : (
+        <>
+          <Field label="6-digit code" required>
+            <input
+              inputMode="numeric"
+              autoFocus
+              placeholder="123456"
+              className={inputClass() + " tracking-[0.4em] text-center text-lg"}
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              onKeyDown={(e) => e.key === "Enter" && verify()}
+            />
+          </Field>
+          <button
+            onClick={verify}
+            disabled={busy || code.length < 6}
+            className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-black font-bold py-3 rounded-lg transition-colors"
+          >
+            {busy ? "Checking…" : "Verify & sign in"}
+          </button>
+          <button
+            onClick={() => { setStage("email"); setCode(""); setErr(""); }}
+            className="w-full mt-3 text-sm text-neutral-500 hover:text-white"
+          >
+            Use a different email
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+const MY_REQ_STATUS = {
+  open: { label: "Awaiting quote", tone: "neutral" },
+  accepted: { label: "Accepted", tone: "orange" },
+};
+
+function MyRequests({ customerId, email, onNew }) {
+  const [rows, setRows] = useState(null);
+
+  useEffect(() => {
+    supabase
+      .from("requests")
+      .select("id, request_type, status, location, created_at, access_token")
+      .eq("customer_id", customerId)
+      .order("created_at", { ascending: false })
+      .then(({ data }) => setRows(data || []));
+  }, [customerId]);
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-extrabold text-white">My requests</h1>
+          <p className="text-neutral-500 text-sm">{email}</p>
+        </div>
+        <button
+          onClick={onNew}
+          className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-black font-bold px-4 py-2.5 rounded-lg transition-colors"
+        >
+          <Plus className="w-4 h-4" /> New request
+        </button>
+      </div>
+
+      {rows === null && <p className="text-neutral-500">Loading…</p>}
+
+      {rows !== null && rows.length === 0 && (
+        <div className="text-center py-12 text-neutral-500 border border-dashed border-neutral-800 rounded-xl">
+          Nothing here yet. Requests you submit while signed in — or any past
+          requests that used <span className="text-neutral-300">{email}</span> —
+          will appear here.
+        </div>
+      )}
+
+      <div className="space-y-3">
+        {(rows || []).map((r) => {
+          const meta = MY_REQ_STATUS[r.status] || { label: r.status, tone: "neutral" };
+          return (
+            <a
+              key={r.id}
+              href={`/r/${encodeURIComponent(r.id)}?t=${r.access_token}`}
+              className="block bg-neutral-900 border border-neutral-800 hover:border-orange-500 rounded-xl p-5 transition-colors"
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span className="font-mono text-orange-500 text-sm">{r.id}</span>
+                <Badge tone={meta.tone}>{meta.label}</Badge>
+              </div>
+              <div className="text-sm text-neutral-400">
+                {r.request_type === "booking" ? "Field service booking" : "Hose quote request"}
+                {r.location ? ` · ${r.location}` : ""}
+                {r.created_at ? ` · ${new Date(r.created_at).toLocaleDateString()}` : ""}
+              </div>
+            </a>
+          );
+        })}
       </div>
     </div>
   );
