@@ -33,9 +33,9 @@ const URGENCY = [
 const EQUIPMENT_TYPES = ["Excavator", "Skid Steer / Loader", "Forklift", "Truck / Trailer", "Agricultural Equipment", "Pressure Washer", "Stationary Machinery", "Other"];
 const JOB_ISSUES = ["Hose burst / failure", "Leak", "Fitting failure", "New installation", "Routine service / inspection", "Other"];
 
-// Admin passcode — separate from any supplier account, gives full access across all suppliers.
-// Same client-side-checked model as supplier passcodes (see SupplierAuth) — change this any time.
-const ADMIN_PASSCODE = "hqadmin2026";
+// Admin & supplier access is by Supabase Auth now (Phase 3a): admin = email in
+// public.app_admin_emails; supplier = suppliers.auth_user_id linked to the
+// signed-in user. See SupplierAuth.
 
 function defaultPricing(scale = 1) {
   const hose = {};
@@ -293,9 +293,15 @@ export default function HoseQuoteApp() {
     const { data: sub } = supabase.auth.onAuthStateChange((evt, s) => {
       setCustomer(s?.user ?? null);
       if (evt === "SIGNED_IN") {
-        setView("customer");
-        setFlowType(null);
-        setCustomerView("mine");
+        // Supplier / admin sign-ins happen from the portal — leave them there;
+        // the supplier-resolution effect routes them. Customers go to My requests.
+        setView((v) => {
+          if (v !== "supplier") {
+            setFlowType(null);
+            setCustomerView("mine");
+          }
+          return v;
+        });
       }
     });
     return () => sub.subscription.unsubscribe();
@@ -321,6 +327,36 @@ export default function HoseQuoteApp() {
     })();
     return () => { cancelled = true; };
   }, [customer, loadAll]);
+
+  // resolve the signed-in account's supplier / admin context (Phase 3a).
+  // Same auth user as the customer side — just interpreted for the portal.
+  const [supplierResolved, setSupplierResolved] = useState(false);
+  useEffect(() => {
+    if (!customer) {
+      setIsAdmin(false);
+      setSession(null);
+      setSupplierResolved(true);
+      return;
+    }
+    let cancelled = false;
+    setSupplierResolved(false);
+    (async () => {
+      const { data: admin } = await supabase.rpc("is_admin");
+      if (cancelled) return;
+      if (admin) {
+        setIsAdmin(true);
+        setSession(null);
+        setSupplierResolved(true);
+        return;
+      }
+      setIsAdmin(false);
+      const { data: sid } = await supabase.rpc("claim_supplier");
+      if (cancelled) return;
+      setSession(sid || null);
+      setSupplierResolved(true);
+    })();
+    return () => { cancelled = true; };
+  }, [customer]);
 
   // prefill contact fields from the profile (only while still blank)
   useEffect(() => {
@@ -709,16 +745,18 @@ export default function HoseQuoteApp() {
             submittedRequestId={bookingSubmittedRequestId} setSubmittedRequestId={setBookingSubmittedRequestId}
           />
         )}
-        {view === "supplier" && !session && !isAdmin && (
-          <SupplierAuth
-            suppliers={suppliers}
-            onLogin={(id) => setSession(id)}
-            onAdminLogin={() => setIsAdmin(true)}
-          />
+        {view === "supplier" && !customer && (
+          <SupplierAuth onBack={() => setView("customer")} />
         )}
-        {view === "supplier" && isAdmin && (
+        {view === "supplier" && customer && !supplierResolved && (
+          <div className="text-center py-16 text-neutral-500">Signing you in…</div>
+        )}
+        {view === "supplier" && customer && supplierResolved && !isAdmin && !session && (
+          <SupplierNotLinked email={customer.email} onSignOut={signOut} />
+        )}
+        {view === "supplier" && customer && supplierResolved && isAdmin && (
           <AdminPortal
-            onLogout={() => setIsAdmin(false)}
+            onLogout={signOut}
             suppliers={suppliers}
             pricingBySupplier={pricingBySupplier}
             requests={requests}
@@ -737,10 +775,10 @@ export default function HoseQuoteApp() {
             onDeleteSupplier={deleteSupplier}
           />
         )}
-        {view === "supplier" && !isAdmin && session && currentSupplier && (
+        {view === "supplier" && customer && supplierResolved && !isAdmin && session && currentSupplier && (
           <SupplierPortal
             supplier={currentSupplier}
-            onLogout={() => setSession(null)}
+            onLogout={signOut}
             requests={requests}
             quotes={quotes}
             connections={connections}
@@ -1746,65 +1784,97 @@ function BookingFlow({ suppliers, pricingBySupplier, requests, quotes, onSubmitB
   );
 }
 
-function SupplierAuth({ suppliers, onLogin, onAdminLogin }) {
-  const [mode, setMode] = useState("supplier"); // "supplier" | "admin"
-  const [selectedId, setSelectedId] = useState(suppliers[0]?.id || "");
-  const [passcode, setPasscode] = useState("");
-  const [adminPasscode, setAdminPasscode] = useState("");
-  const [error, setError] = useState("");
-  const [adminError, setAdminError] = useState("");
+function SupplierAuth({ onBack }) {
+  const [email, setEmail] = useState("");
+  const [sent, setSent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
 
-  const doLogin = () => {
-    const s = suppliers.find((sp) => sp.id === selectedId);
-    if (!s) { setError("Select a company."); return; }
-    if (s.passcode !== passcode) { setError("Incorrect passcode."); return; }
-    onLogin(s.id);
-  };
-
-  const doAdminLogin = () => {
-    if (adminPasscode !== ADMIN_PASSCODE) { setAdminError("Incorrect passcode."); return; }
-    onAdminLogin();
+  const sendLink = async () => {
+    const addr = email.trim();
+    if (!addr) return;
+    setErr(""); setBusy(true);
+    const { error } = await supabase.auth.signInWithOtp({
+      email: addr,
+      options: { shouldCreateUser: true, emailRedirectTo: `${window.location.origin}/supplier` },
+    });
+    setBusy(false);
+    if (error) setErr(error.message);
+    else setSent(true);
   };
 
   return (
-    <div className="max-w-md mx-auto">
-      <div className="text-center mb-8">
+    <div className="max-w-sm mx-auto">
+      {onBack && (
+        <button type="button" onClick={onBack} className="flex items-center gap-1.5 text-sm text-neutral-500 hover:text-white mb-6">
+          <ArrowLeft className="w-3.5 h-3.5" /> Back
+        </button>
+      )}
+      <div className="text-center mb-6">
         <div className="w-14 h-14 rounded-xl bg-orange-500/10 border border-orange-500/40 flex items-center justify-center mx-auto mb-4">
           <Building2 className="w-6 h-6 text-orange-500" />
         </div>
-        <h1 className="text-2xl font-extrabold text-white mb-1">Supplier Portal</h1>
-        <p className="text-neutral-400 text-sm">Manage your quotes and pricing.</p>
+        <h1 className="text-2xl font-extrabold text-white mb-1">
+          {sent ? "Check your email" : "Supplier Portal"}
+        </h1>
+        <p className="text-neutral-400 text-sm">
+          {sent
+            ? `We sent a sign-in link to ${email.trim()}.`
+            : "Sign in with the email on your supplier account."}
+        </p>
       </div>
 
-      <div className="flex gap-1 bg-neutral-900 rounded-lg p-1 mb-4">
-        {[{ key: "supplier", label: "Supplier" }, { key: "admin", label: "Admin" }].map((m) => (
-          <button key={m.key} onClick={() => setMode(m.key)}
-            className={`flex-1 py-2 rounded-md font-semibold text-sm transition-colors ${mode === m.key ? "bg-orange-500 text-black" : "text-neutral-400"}`}>
-            {m.label}
-          </button>
-        ))}
-      </div>
-
-      {mode === "supplier" ? (
-        <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6">
-          <Field label="Company" required>
-            <select className={inputClass()} value={selectedId} onChange={(e) => setSelectedId(e.target.value)}>
-              {suppliers.map((s) => <option className="bg-neutral-900 text-white" key={s.id} value={s.id}>{s.companyName}</option>)}
-            </select>
-          </Field>
-          <Field label="Passcode" required error={error}>
-            <input type="password" className={inputClass(error)} value={passcode} onChange={(e) => setPasscode(e.target.value)} />
-          </Field>
-          <button onClick={doLogin} className="w-full bg-orange-500 hover:bg-orange-600 text-black font-bold py-3 rounded-lg transition-colors">Log in</button>
-        </div>
-      ) : (
-        <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6">
-          <Field label="Admin Passcode" required error={adminError}>
-            <input type="password" className={inputClass(adminError)} value={adminPasscode} onChange={(e) => setAdminPasscode(e.target.value)} />
-          </Field>
-          <button onClick={doAdminLogin} className="w-full bg-orange-500 hover:bg-orange-600 text-black font-bold py-3 rounded-lg transition-colors">Log in as Admin</button>
+      {err && (
+        <div className="mb-4 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          {err}
         </div>
       )}
+
+      {sent ? (
+        <button onClick={() => { setSent(false); setErr(""); }} className="w-full text-sm text-neutral-400 hover:text-white">
+          Use a different email
+        </button>
+      ) : (
+        <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6">
+          <Field label="Email" required>
+            <input
+              type="email"
+              autoFocus
+              placeholder="you@company.com"
+              className={inputClass()}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && sendLink()}
+            />
+          </Field>
+          <button
+            onClick={sendLink}
+            disabled={busy || !email.trim()}
+            className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-black font-bold py-3 rounded-lg transition-colors"
+          >
+            {busy ? "Sending…" : "Email me a sign-in link"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SupplierNotLinked({ email, onSignOut }) {
+  return (
+    <div className="max-w-sm mx-auto text-center">
+      <div className="w-14 h-14 rounded-xl bg-orange-500/10 border border-orange-500/40 flex items-center justify-center mx-auto mb-4">
+        <Building2 className="w-6 h-6 text-orange-500" />
+      </div>
+      <h1 className="text-2xl font-extrabold text-white mb-1">Account not linked</h1>
+      <p className="text-neutral-400 text-sm mb-6">
+        <span className="text-neutral-300">{email}</span> isn't attached to a
+        supplier account yet. Ask the operator to set this as the contact email
+        on your supplier record, then sign in again.
+      </p>
+      <button onClick={onSignOut} className="text-sm text-neutral-400 hover:text-white">
+        Sign out
+      </button>
     </div>
   );
 }
