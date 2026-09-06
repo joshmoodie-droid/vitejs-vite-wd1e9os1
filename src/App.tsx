@@ -198,8 +198,14 @@ function connectionFromRow(r) {
   return { id: r.id, quoteId: r.quote_id, unlocked: r.unlocked, unlockedAt: r.unlocked_at };
 }
 
+// The supplier email links to /supplier — open straight on that side.
+const initialView =
+  typeof window !== "undefined" && /^\/supplier\/?$/.test(window.location.pathname)
+    ? "supplier"
+    : "customer";
+
 export default function HoseQuoteApp() {
-  const [view, setView] = useState("customer");
+  const [view, setView] = useState(initialView);
   const [flowType, setFlowType] = useState(null);
   const [loading, setLoading] = useState(true);
   const [suppliers, setSuppliers] = useState([]);
