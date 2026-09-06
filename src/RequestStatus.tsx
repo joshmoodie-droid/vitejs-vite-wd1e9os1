@@ -1,10 +1,9 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "./supabaseClient";
 
-// Read-only view reached from email links: /r/:requestId?t=:accessToken
-// Shows the current state of a request + its quotes without needing a login.
-// Accepting a quote still happens in the main app (and will move behind
-// customer auth in Phase 2).
+// View reached from customer email links: /r/:requestId?t=:accessToken
+// Shows the request + its quotes and lets the customer accept a confirmed
+// quote — no login needed. (Phase 2 moves this behind customer auth.)
 
 type Screen = "loading" | "notfound" | "ok";
 
@@ -17,6 +16,9 @@ const STATUS_LABEL: Record<string, string> = {
   completed: "Job complete",
 };
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export default function RequestStatus({
   requestId,
   token,
@@ -28,59 +30,103 @@ export default function RequestStatus({
   const [request, setRequest] = useState<any>(null);
   const [quotes, setQuotes] = useState<any[]>([]);
   const [supplier, setSupplier] = useState<any>(null);
+  const [acceptingId, setAcceptingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    (async () => {
-      // The token is the security boundary — request ids are guessable, so
-      // never resolve a request without a valid one.
-      const isUuid =
-        !!token &&
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-          token,
-        );
-      if (!isUuid) {
-        setScreen("notfound");
-        return;
-      }
-      const { data: reqRows } = await supabase
-        .from("requests")
-        .select("*")
-        .eq("id", requestId)
-        .eq("access_token", token as string)
-        .limit(1);
-      const req = reqRows?.[0];
-      if (!req) {
-        setScreen("notfound");
-        return;
-      }
+  const load = useCallback(async () => {
+    // The token is the security boundary — request ids are guessable, so
+    // never resolve a request without a valid one.
+    if (!token || !UUID_RE.test(token)) {
+      setScreen("notfound");
+      return;
+    }
+    const { data: reqRows } = await supabase
+      .from("requests")
+      .select("*")
+      .eq("id", requestId)
+      .eq("access_token", token)
+      .limit(1);
+    const req = reqRows?.[0];
+    if (!req) {
+      setScreen("notfound");
+      return;
+    }
 
-      const { data: quoteRows } = await supabase
-        .from("quotes")
-        .select("*")
-        .eq("request_id", requestId)
-        .neq("status", "declined")
-        .order("created_at", { ascending: false });
+    const { data: quoteRows } = await supabase
+      .from("quotes")
+      .select("*")
+      .eq("request_id", requestId)
+      .neq("status", "declined")
+      .order("created_at", { ascending: false });
 
-      const accepted = (quoteRows || []).find(
-        (x: any) => x.status === "accepted" || x.status === "completed",
-      );
-      if (accepted?.supplier_id) {
-        const { data: sup } = await supabase
-          .from("suppliers")
-          .select("company_name, contact_email, contact_phone")
-          .eq("id", accepted.supplier_id)
-          .single();
-        setSupplier(sup);
-      }
+    const accepted = (quoteRows || []).find(
+      (x: any) => x.status === "accepted" || x.status === "completed",
+    );
+    if (accepted?.supplier_id) {
+      const { data: sup } = await supabase
+        .from("suppliers")
+        .select("company_name, contact_email, contact_phone")
+        .eq("id", accepted.supplier_id)
+        .single();
+      setSupplier(sup);
+    } else {
+      setSupplier(null);
+    }
 
-      setRequest(req);
-      setQuotes(quoteRows || []);
-      setScreen("ok");
-    })();
+    setRequest(req);
+    setQuotes(quoteRows || []);
+    setScreen("ok");
   }, [requestId, token]);
 
-  const card =
-    "border border-neutral-800 bg-neutral-900 rounded-xl p-5";
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  // Mirrors acceptQuote() in App.tsx so an emailed customer can accept
+  // without opening the full app.
+  async function acceptQuote(quote: any) {
+    setError(null);
+    setAcceptingId(quote.id);
+    try {
+      const fs = quote.field_service;
+      const confirmedFs =
+        fs && fs.status === "quoted" ? { ...fs, status: "confirmed" } : fs;
+
+      const { error: e1 } = await supabase
+        .from("quotes")
+        .update({ status: "accepted", field_service: confirmedFs ?? null })
+        .eq("id", quote.id);
+      if (e1) throw e1;
+
+      // Every other quote on this request is now off the table.
+      await supabase
+        .from("quotes")
+        .update({ status: "declined" })
+        .eq("request_id", requestId)
+        .neq("id", quote.id);
+
+      await supabase
+        .from("requests")
+        .update({ status: "accepted" })
+        .eq("id", requestId);
+
+      // Contact-unlock record the supplier portal reads.
+      await supabase
+        .from("connections")
+        .insert({ id: `C-${Date.now()}`, quote_id: quote.id, unlocked: false });
+
+      await load();
+    } catch (err: any) {
+      setError(
+        err?.message ||
+          "Something went wrong accepting the quote. Please try again.",
+      );
+    } finally {
+      setAcceptingId(null);
+    }
+  }
+
+  const card = "border border-neutral-800 bg-neutral-900 rounded-xl p-5";
 
   return (
     <div
@@ -136,6 +182,12 @@ export default function RequestStatus({
               </p>
             </div>
 
+            {error && (
+              <div className="mb-4 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                {error}
+              </div>
+            )}
+
             {quotes.length === 0 && (
               <div className={card}>
                 <p className="text-neutral-400 text-sm">
@@ -147,11 +199,11 @@ export default function RequestStatus({
 
             <div className="space-y-3">
               {quotes.map((q) => {
-                const confirmed = ["confirmed", "accepted", "completed"].includes(
-                  q.status,
-                );
                 const isAccepted =
                   q.status === "accepted" || q.status === "completed";
+                const anyAccepted = quotes.some(
+                  (x) => x.status === "accepted" || x.status === "completed",
+                );
                 return (
                   <div
                     key={q.id}
@@ -181,6 +233,9 @@ export default function RequestStatus({
 
                     {isAccepted && supplier && (
                       <div className="mt-3 pt-3 border-t border-neutral-700 text-sm">
+                        <div className="text-neutral-400 mb-1">
+                          Your supplier
+                        </div>
                         <div className="font-semibold">
                           {supplier.company_name}
                         </div>
@@ -192,13 +247,22 @@ export default function RequestStatus({
                       </div>
                     )}
 
-                    {q.status === "confirmed" && (
-                      <a
-                        href="/"
-                        className="mt-4 block text-center bg-orange-500 hover:bg-orange-600 text-black font-bold py-2.5 rounded-lg"
+                    {q.status === "confirmed" && !anyAccepted && (
+                      <button
+                        type="button"
+                        onClick={() => acceptQuote(q)}
+                        disabled={acceptingId != null}
+                        className="mt-4 w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-black font-bold py-2.5 rounded-lg transition-colors"
                       >
-                        Open the app to accept
-                      </a>
+                        {acceptingId === q.id
+                          ? "Accepting…"
+                          : "Accept this quote"}
+                      </button>
+                    )}
+                    {q.status === "confirmed" && anyAccepted && (
+                      <p className="mt-3 text-xs text-neutral-500">
+                        Another quote on this request has been accepted.
+                      </p>
                     )}
                   </div>
                 );
