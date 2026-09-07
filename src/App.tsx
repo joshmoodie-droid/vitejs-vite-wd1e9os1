@@ -178,6 +178,7 @@ function pricingFromRow(r) {
 function requestFromRow(r) {
   return {
     id: r.id, requestType: r.request_type, status: r.status, selectedSupplierId: r.selected_supplier_id,
+    accessToken: r.access_token,
     urgency: r.urgency, location: r.location, fieldServiceRequested: r.field_service_requested,
     siteAddress: r.site_address, accessNotes: r.access_notes, fsLabourHoursEstimate: r.fs_labour_hours_estimate,
     name: r.name, phone: r.phone, email: r.email, preferredTime: r.preferred_time, notes: r.notes, photoUrl: r.photo_url,
@@ -316,13 +317,8 @@ export default function HoseQuoteApp() {
       const { data: prof } = await supabase.from("profiles").select("*").eq("id", customer.id).single();
       if (!cancelled) setProfile(prof || { id: customer.id, email: customer.email });
       if (customer.email) {
-        const { data: claimed } = await supabase
-          .from("requests")
-          .update({ customer_id: customer.id })
-          .is("customer_id", null)
-          .ilike("email", customer.email)
-          .select("id");
-        if (claimed?.length) loadAll();
+        const { data: n } = await supabase.rpc("claim_my_requests");
+        if (n) loadAll();
       }
     })();
     return () => { cancelled = true; };
@@ -430,8 +426,8 @@ export default function HoseQuoteApp() {
       name: form.name, phone: form.phone, email: form.email, preferred_time: form.preferredTime,
       notes: form.notes, photo_url: form.photoUrl, assemblies: form.assemblies,
     };
-    await supabase.from("requests").insert(row);
-    const record = requestFromRow({ ...row, created_at: new Date().toISOString() });
+    const { data: inserted } = await supabase.from("requests").insert(row).select().single();
+    const record = requestFromRow(inserted ?? { ...row, created_at: new Date().toISOString() });
 
     const pricing = pricingBySupplier[form.selectedSupplierId];
     const est = calcEstimate(form, pricing);
@@ -449,7 +445,7 @@ export default function HoseQuoteApp() {
         lead_time_days: form.urgency === "emergency" ? 1 : form.urgency === "priority" ? 2 : 4,
         quote_type: "auto", status: "pending", field_service: fieldService,
       };
-      await supabase.from("quotes").insert(quoteRow);
+      await supabase.rpc("create_auto_quote", { q: quoteRow });
       newQuoteRecord = quoteFromRow({ ...quoteRow, created_at: new Date().toISOString() });
     }
 
@@ -495,27 +491,24 @@ export default function HoseQuoteApp() {
   };
 
   const acceptQuote = async (quoteId, requestId) => {
+    const req = requests.find((r) => r.id === requestId);
+    const { error } = await supabase.rpc("accept_quote_by_token", {
+      p_request_id: requestId,
+      p_token: req?.accessToken ?? null,
+      p_quote_id: quoteId,
+    });
+    if (error) { console.error("Accept failed", error); return; }
+
     const target = quotes.find((q) => q.id === quoteId);
     const fs = target?.fieldService;
     const confirmedFs = fs && fs.status === "quoted" ? { ...fs, status: "confirmed" } : fs;
-
-    await supabase.from("quotes").update({ status: "accepted", field_service: confirmedFs || null }).eq("id", quoteId);
-    const others = quotes.filter((q) => q.requestId === requestId && q.id !== quoteId);
-    for (const o of others) {
-      await supabase.from("quotes").update({ status: "declined" }).eq("id", o.id);
-    }
-    await supabase.from("requests").update({ status: "accepted" }).eq("id", requestId);
-
-    const newConnRow = { id: `C-${Date.now()}`, quote_id: quoteId, unlocked: false };
-    await supabase.from("connections").insert(newConnRow);
-
     setQuotes((qs) => qs.map((q) => {
       if (q.id === quoteId) return { ...q, status: "accepted", fieldService: confirmedFs };
       if (q.requestId === requestId) return { ...q, status: "declined" };
       return q;
     }));
     setRequests((rs) => rs.map((r) => (r.id === requestId ? { ...r, status: "accepted" } : r)));
-    setConnections((cs) => [...cs, connectionFromRow({ ...newConnRow, unlocked_at: null })]);
+    loadAll();
   };
 
   const unlockContact = async (quoteId) => {
@@ -723,8 +716,8 @@ export default function HoseQuoteApp() {
                 notes: record.notes, photo_url: record.photoUrl, equipment_type: record.equipmentType,
                 issue: record.issue, description: record.description, labour_hours_estimate: record.labourHoursEstimate,
               };
-              await supabase.from("requests").insert(row);
-              setRequests((rs) => [requestFromRow({ ...row, created_at: new Date().toISOString() }), ...rs]);
+              const { data: insertedReq } = await supabase.from("requests").insert(row).select().single();
+              setRequests((rs) => [requestFromRow(insertedReq ?? { ...row, created_at: new Date().toISOString() }), ...rs]);
               if (newQuote) {
                 const qrow = {
                   id: newQuote.id, request_id: record.id, supplier_id: newQuote.supplierId, is_booking: true,
@@ -733,7 +726,7 @@ export default function HoseQuoteApp() {
                   customer_labour_hours: newQuote.customerLabourHours, hose_assembly_cost: 0,
                   lead_time_days: newQuote.leadTimeDays, quote_type: "auto", status: "pending",
                 };
-                await supabase.from("quotes").insert(qrow);
+                await supabase.rpc("create_auto_quote", { q: qrow });
                 setQuotes((qs) => [quoteFromRow({ ...qrow, created_at: new Date().toISOString() }), ...qs]);
               }
             }}

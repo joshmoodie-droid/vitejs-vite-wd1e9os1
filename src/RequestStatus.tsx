@@ -40,41 +40,17 @@ export default function RequestStatus({
       setScreen("notfound");
       return;
     }
-    const { data: reqRows } = await supabase
-      .from("requests")
-      .select("*")
-      .eq("id", requestId)
-      .eq("access_token", token)
-      .limit(1);
-    const req = reqRows?.[0];
-    if (!req) {
+    const { data } = await supabase.rpc("get_request_by_token", {
+      p_request_id: requestId,
+      p_token: token,
+    });
+    if (!data || !data.request) {
       setScreen("notfound");
       return;
     }
-
-    const { data: quoteRows } = await supabase
-      .from("quotes")
-      .select("*")
-      .eq("request_id", requestId)
-      .neq("status", "declined")
-      .order("created_at", { ascending: false });
-
-    const accepted = (quoteRows || []).find(
-      (x: any) => x.status === "accepted" || x.status === "completed",
-    );
-    if (accepted?.supplier_id) {
-      const { data: sup } = await supabase
-        .from("suppliers")
-        .select("company_name, contact_email, contact_phone")
-        .eq("id", accepted.supplier_id)
-        .single();
-      setSupplier(sup);
-    } else {
-      setSupplier(null);
-    }
-
-    setRequest(req);
-    setQuotes(quoteRows || []);
+    setRequest(data.request);
+    setQuotes(data.quotes || []);
+    setSupplier(data.supplier || null);
     setScreen("ok");
   }, [requestId, token]);
 
@@ -82,39 +58,18 @@ export default function RequestStatus({
     load();
   }, [load]);
 
-  // Mirrors acceptQuote() in App.tsx so an emailed customer can accept
-  // without opening the full app.
+  // Accept via the security-definer RPC (token-checked server-side) so an
+  // emailed customer can accept without opening the full app or a login.
   async function acceptQuote(quote: any) {
     setError(null);
     setAcceptingId(quote.id);
     try {
-      const fs = quote.field_service;
-      const confirmedFs =
-        fs && fs.status === "quoted" ? { ...fs, status: "confirmed" } : fs;
-
-      const { error: e1 } = await supabase
-        .from("quotes")
-        .update({ status: "accepted", field_service: confirmedFs ?? null })
-        .eq("id", quote.id);
-      if (e1) throw e1;
-
-      // Every other quote on this request is now off the table.
-      await supabase
-        .from("quotes")
-        .update({ status: "declined" })
-        .eq("request_id", requestId)
-        .neq("id", quote.id);
-
-      await supabase
-        .from("requests")
-        .update({ status: "accepted" })
-        .eq("id", requestId);
-
-      // Contact-unlock record the supplier portal reads.
-      await supabase
-        .from("connections")
-        .insert({ id: `C-${Date.now()}`, quote_id: quote.id, unlocked: false });
-
+      const { error } = await supabase.rpc("accept_quote_by_token", {
+        p_request_id: requestId,
+        p_token: token,
+        p_quote_id: quote.id,
+      });
+      if (error) throw error;
       await load();
     } catch (err: any) {
       setError(
