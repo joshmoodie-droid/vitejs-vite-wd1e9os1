@@ -243,24 +243,11 @@ export default function HoseQuoteApp() {
     };
   }, []);
 
-  const loadAll = useCallback(async () => {
-    setLoading(true);
+  const loadAll = useCallback(async (opts) => {
+    if (!opts?.quiet) setLoading(true);
     try {
-      let { data: supRows } = await supabase.from("suppliers").select("*");
-      let sup = (supRows || []).map(supplierFromRow);
-
-      if (sup.length === 0) {
-        const seedA = { company_name: "Coastal Hydraulics Co", passcode: "demo123", service_area: "", contact_email: "team@coastalhydraulics.example", contact_phone: "07 5555 0101" };
-        const seedB = { company_name: "Rapid Hose Solutions", passcode: "demo456", service_area: "", contact_email: "hello@rapidhose.example", contact_phone: "07 5555 0202" };
-        const { data: inserted } = await supabase.from("suppliers").insert([seedA, seedB]).select();
-        sup = (inserted || []).map(supplierFromRow);
-        if (sup.length === 2) {
-          await supabase.from("supplier_pricing").insert([
-            { supplier_id: sup[0].id, ...pricingToRow(defaultPricing(1)) },
-            { supplier_id: sup[1].id, ...pricingToRow(defaultPricing(0.88)) },
-          ]);
-        }
-      }
+      const { data: supRows } = await supabase.from("suppliers").select("*");
+      const sup = (supRows || []).map(supplierFromRow);
 
       const { data: pricingRows } = await supabase.from("supplier_pricing").select("*");
       const pbs = {};
@@ -283,10 +270,17 @@ export default function HoseQuoteApp() {
     } catch (e) {
       console.error("Failed to load data", e);
     }
-    setLoading(false);
+    if (!opts?.quiet) setLoading(false);
   }, []);
 
   useEffect(() => { loadAll(); }, [loadAll]);
+
+  // Re-fetch once the auth user resolves. The mount loadAll() above runs before
+  // the JWT is attached, so RLS-filtered tables (requests / quotes / connections)
+  // come back empty for a signed-in supplier or admin until we ask again.
+  useEffect(() => {
+    if (customer) loadAll({ quiet: true });
+  }, [customer, loadAll]);
 
   // ---- customer auth wiring (Phase 2) ----
   useEffect(() => {
