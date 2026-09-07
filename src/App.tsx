@@ -420,8 +420,8 @@ export default function HoseQuoteApp() {
       name: form.name, phone: form.phone, email: form.email, preferred_time: form.preferredTime,
       notes: form.notes, photo_url: form.photoUrl, assemblies: form.assemblies,
     };
-    const { data: inserted } = await supabase.from("requests").insert(row).select().single();
-    const record = requestFromRow(inserted ?? { ...row, created_at: new Date().toISOString() });
+    const { data: created } = await supabase.rpc("create_request", { r: row });
+    const record = requestFromRow({ ...row, ...(created ?? { created_at: new Date().toISOString() }) });
 
     const pricing = pricingBySupplier[form.selectedSupplierId];
     const est = calcEstimate(form, pricing);
@@ -710,8 +710,8 @@ export default function HoseQuoteApp() {
                 notes: record.notes, photo_url: record.photoUrl, equipment_type: record.equipmentType,
                 issue: record.issue, description: record.description, labour_hours_estimate: record.labourHoursEstimate,
               };
-              const { data: insertedReq } = await supabase.from("requests").insert(row).select().single();
-              setRequests((rs) => [requestFromRow(insertedReq ?? { ...row, created_at: new Date().toISOString() }), ...rs]);
+              const { data: createdReq } = await supabase.rpc("create_request", { r: row });
+              setRequests((rs) => [requestFromRow({ ...row, ...(createdReq ?? { created_at: new Date().toISOString() }) }), ...rs]);
               if (newQuote) {
                 const qrow = {
                   id: newQuote.id, request_id: record.id, supplier_id: newQuote.supplierId, is_booking: true,
