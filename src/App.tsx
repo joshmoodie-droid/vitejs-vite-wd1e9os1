@@ -170,7 +170,7 @@ const inputClass = (error) =>
 /* ---------- Supabase <-> app shape mapping ---------- */
 
 function supplierFromRow(r) {
-  return { id: r.id, companyName: r.company_name, passcode: r.passcode, serviceArea: r.service_area || "", contactEmail: r.contact_email, contactPhone: r.contact_phone, createdAt: r.created_at };
+  return { id: r.id, companyName: r.company_name, serviceArea: r.service_area || "", contactEmail: r.contact_email, contactPhone: r.contact_phone, createdAt: r.created_at };
 }
 function pricingFromRow(r) {
   return { hose: r.hose || {}, fitting: r.fitting || {}, labourBase: r.labour_base, crimpCharge: r.crimp_charge, travelBase: r.travel_base, calloutFee: r.callout_fee, labourHourlyRate: r.labour_hourly_rate };
@@ -565,8 +565,8 @@ export default function HoseQuoteApp() {
   };
 
   // ---- Admin: supplier account management ----
-  const addSupplier = async (companyName, passcode, serviceArea, contactEmail, contactPhone) => {
-    const row = { company_name: companyName, passcode, service_area: serviceArea || "", contact_email: contactEmail || null, contact_phone: contactPhone || null };
+  const addSupplier = async (companyName, serviceArea, contactEmail, contactPhone) => {
+    const row = { company_name: companyName, service_area: serviceArea || "", contact_email: contactEmail || null, contact_phone: contactPhone || null };
     const { data: inserted } = await supabase.from("suppliers").insert([row]).select();
     const newSupplier = (inserted || []).map(supplierFromRow)[0];
     if (newSupplier) {
@@ -581,7 +581,6 @@ export default function HoseQuoteApp() {
   const updateSupplier = async (supplierId, fields) => {
     const row = {};
     if (fields.companyName !== undefined) row.company_name = fields.companyName;
-    if (fields.passcode !== undefined) row.passcode = fields.passcode;
     if (fields.serviceArea !== undefined) row.service_area = fields.serviceArea;
     if (fields.contactEmail !== undefined) row.contact_email = fields.contactEmail;
     if (fields.contactPhone !== undefined) row.contact_phone = fields.contactPhone;
@@ -2174,7 +2173,6 @@ function AdminSuppliers({ suppliers, pricingBySupplier, onSavePricing, onAddSupp
 
 function AdminSupplierRow({ supplier, pricing, onSavePricing, onUpdate, onDelete }) {
   const [companyName, setCompanyName] = useState(supplier.companyName);
-  const [passcode, setPasscode] = useState(supplier.passcode);
   const [serviceArea, setServiceArea] = useState(supplier.serviceArea || "");
   const [contactEmail, setContactEmail] = useState(supplier.contactEmail || "");
   const [contactPhone, setContactPhone] = useState(supplier.contactPhone || "");
@@ -2182,7 +2180,7 @@ function AdminSupplierRow({ supplier, pricing, onSavePricing, onUpdate, onDelete
   const [pricingOpen, setPricingOpen] = useState(false);
 
   const save = async () => {
-    await onUpdate({ companyName, passcode, serviceArea, contactEmail, contactPhone });
+    await onUpdate({ companyName, serviceArea, contactEmail, contactPhone });
     setSavedMsg("Saved");
     setTimeout(() => setSavedMsg(""), 1500);
   };
@@ -2199,16 +2197,13 @@ function AdminSupplierRow({ supplier, pricing, onSavePricing, onUpdate, onDelete
         <Field label="Company name">
           <input className={inputClass()} value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
         </Field>
-        <Field label="Passcode">
-          <input className={inputClass()} value={passcode} onChange={(e) => setPasscode(e.target.value)} />
-        </Field>
         <Field label="Service area" hint="Blank = all areas">
           <input className={inputClass()} value={serviceArea} onChange={(e) => setServiceArea(e.target.value)} />
         </Field>
         <Field label="Contact phone">
           <input className={inputClass()} value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} />
         </Field>
-        <Field label="Contact email">
+        <Field label="Contact email" hint="Used for the supplier's magic-link login">
           <input className={inputClass()} value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} />
         </Field>
       </div>
@@ -2231,16 +2226,15 @@ function AdminSupplierRow({ supplier, pricing, onSavePricing, onUpdate, onDelete
 
 function AdminAddSupplierForm({ onAdd, onDone }) {
   const [companyName, setCompanyName] = useState("");
-  const [passcode, setPasscode] = useState("");
   const [serviceArea, setServiceArea] = useState("");
   const [contactEmail, setContactEmail] = useState("");
   const [contactPhone, setContactPhone] = useState("");
   const [saving, setSaving] = useState(false);
 
   const submit = async () => {
-    if (!companyName || !passcode) return;
+    if (!companyName || !contactEmail) return;
     setSaving(true);
-    await onAdd(companyName, passcode, serviceArea, contactEmail, contactPhone);
+    await onAdd(companyName, serviceArea, contactEmail, contactPhone);
     setSaving(false);
     onDone();
   };
@@ -2252,8 +2246,8 @@ function AdminAddSupplierForm({ onAdd, onDone }) {
         <Field label="Company name" required>
           <input className={inputClass()} value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
         </Field>
-        <Field label="Passcode" required>
-          <input className={inputClass()} value={passcode} onChange={(e) => setPasscode(e.target.value)} />
+        <Field label="Contact email" required hint="The supplier signs in with a magic link to this address">
+          <input className={inputClass()} value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} />
         </Field>
         <Field label="Service area" hint="Blank = all areas">
           <input className={inputClass()} value={serviceArea} onChange={(e) => setServiceArea(e.target.value)} />
@@ -2261,12 +2255,9 @@ function AdminAddSupplierForm({ onAdd, onDone }) {
         <Field label="Contact phone">
           <input className={inputClass()} value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} />
         </Field>
-        <Field label="Contact email">
-          <input className={inputClass()} value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} />
-        </Field>
       </div>
       <div className="flex gap-2">
-        <button onClick={submit} disabled={saving || !companyName || !passcode} className="flex-1 bg-orange-500 hover:bg-orange-600 text-black font-bold py-2.5 rounded-lg transition-colors disabled:opacity-50">
+        <button onClick={submit} disabled={saving || !companyName || !contactEmail} className="flex-1 bg-orange-500 hover:bg-orange-600 text-black font-bold py-2.5 rounded-lg transition-colors disabled:opacity-50">
           {saving ? "Adding..." : "Add supplier"}
         </button>
         <button onClick={onDone} className="px-4 border border-neutral-700 text-neutral-300 rounded-lg text-sm">Cancel</button>
