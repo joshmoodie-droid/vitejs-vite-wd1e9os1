@@ -1,15 +1,18 @@
 import { createClient } from '@supabase/supabase-js'
 
-// Prefer env vars (Vercel project settings / local .env). Fall back to the
-// values that were previously hardcoded here so existing deploys keep working
-// even before the Vercel env vars are added. These are the *publishable*
-// Supabase credentials — designed to ship in the browser bundle — and are
-// already public in this repo's history. Phase 3 (RLS) will rotate the key
-// and drop this fallback.
-const supabaseUrl =
-  import.meta.env.VITE_SUPABASE_URL || 'https://qwycavfmdpknnflxlylw.supabase.co'
-const supabaseKey =
-  import.meta.env.VITE_SUPABASE_ANON_KEY ||
-  'sb_publishable_omCeR7NRSVq6zIoqcGi3Aw_d9L-IWno'
+// Config comes from env vars: `.env` for local dev (gitignored), Vercel
+// Project → Settings → Environment Variables for deploys. See `.env.example`.
+// The key here is the Supabase *publishable* key — designed to ship in the
+// browser bundle; the security boundary is Row Level Security (see
+// supabase/migrations/0006_phase3c_rls_lockdown.sql), not key secrecy.
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error(
+    'Missing VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY. ' +
+      'Copy .env.example to .env for local dev, or set them in the Vercel project settings.',
+  )
+}
 
 export const supabase = createClient(supabaseUrl, supabaseKey)
