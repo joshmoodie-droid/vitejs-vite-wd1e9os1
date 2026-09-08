@@ -1,9 +1,8 @@
 import { test, expect } from "@playwright/test";
 
-// These run against a production build with placeholder Supabase config (see
-// .env.example), so they cover routing, rendering and client-side form logic —
-// not anything that needs live data. The full submit -> quote -> accept flow
-// needs real Supabase credentials and is intentionally out of scope here.
+// These cover routing, rendering and client-side form logic. They read from
+// the live (public, RLS-protected) Supabase project but never write — the full
+// submit -> quote -> accept flow is intentionally out of scope here.
 
 test("home page shows both entry points", async ({ page }) => {
   await page.goto("/");

@@ -8,6 +8,15 @@ on:
 jobs:
   build-and-smoke:
     runs-on: ubuntu-latest
+
+    # The Supabase *publishable* key is designed to be public — it ships in
+    # every deployed browser bundle and Supabase documents it as safe to share.
+    # RLS is the security boundary. Set at job level so the Playwright
+    # webServer's own `npm run build` inherits it too.
+    env:
+      VITE_SUPABASE_URL: https://qwycavfmdpknnflxlylw.supabase.co
+      VITE_SUPABASE_ANON_KEY: sb_publishable_omCeR7NRSVq6zIoqcGi3Aw_d9L-IWno
+
     steps:
       - uses: actions/checkout@v4
 
@@ -17,12 +26,6 @@ jobs:
           cache: npm
 
       - run: npm ci
-
-      # Placeholder Supabase config so the build inlines *something*; the smoke
-      # tests don't hit live data. Swap in real repo secrets here later if you
-      # add tests that need them.
-      - name: Provide build-time env
-        run: cp .env.example .env
 
       - name: Build
         run: npm run build
