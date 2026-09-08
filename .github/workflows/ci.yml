@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  build-and-smoke:
+    runs-on: ubuntu-latest
+
+    # The Supabase *publishable* key is designed to be public — it ships in
+    # every deployed browser bundle and Supabase documents it as safe to share.
+    # RLS is the security boundary. Set at job level so the Playwright
+    # webServer's own `npm run build` inherits it too.
+    env:
+      VITE_SUPABASE_URL: https://qwycavfmdpknnflxlylw.supabase.co
+      VITE_SUPABASE_ANON_KEY: sb_publishable_omCeR7NRSVq6zIoqcGi3Aw_d9L-IWno
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Smoke tests
+        run: npm run test:e2e
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
