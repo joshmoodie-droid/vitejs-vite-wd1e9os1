@@ -6,153 +6,15 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Wrench, Gauge, Settings, Droplet, MapPin, User, ChevronLeft, ChevronRight, RefreshCw, Send, Lock, Unlock, LogOut, Building2, CheckCircle2, Plus, Clock, Truck, ClipboardList, ArrowLeft } from "lucide-react";
 import { supabase } from "./supabaseClient";
-
-const HOSE_TYPES = {
-  hydraulic_oil: ["1-wire braid (SAE 100R1)", "2-wire braid (SAE 100R2)", "4-wire spiral (SAE 100R12)"],
-  pressure_washer: ["2-wire braid (EN 853)", "Textile reinforced (low pressure)"],
-};
-
-const BORES = {
-  hydraulic_oil: [
-    { key: "1_4", label: '1/4" (6mm)' },
-    { key: "3_8", label: '3/8" (10mm)' },
-    { key: "1_2", label: '1/2" (13mm)' },
-    { key: "5_8", label: '5/8" (16mm)' },
-    { key: "3_4", label: '3/4" (19mm)' },
-  ],
-  pressure_washer: [
-    { key: "1_4", label: '1/4" (6mm)' },
-    { key: "3_8", label: '3/8" (10mm)' },
-    { key: "1_2", label: '1/2" (13mm)' },
-  ],
-};
-
-const FITTING_TYPES = ["BSP Male", "BSP Female", "JIC 37° Male", "JIC 37° Female", "ORFS Male", "ORFS Female", "NPT Male", "NPT Female", "SAE Flange"];
-const ORIENTATIONS = ["Straight", "45° Bend", "90° Bend"];
-const URGENCY = [
-  { key: "standard", label: "Standard", desc: "Normal turnaround", mult: 1 },
-  { key: "priority", label: "Priority", desc: "Fast-track service", mult: 1.3 },
-  { key: "emergency", label: "Emergency", desc: "Urgent / after-hours", mult: 1.6 },
-];
-
-const EQUIPMENT_TYPES = ["Excavator", "Skid Steer / Loader", "Forklift", "Truck / Trailer", "Agricultural Equipment", "Pressure Washer", "Stationary Machinery", "Other"];
-const JOB_ISSUES = ["Hose burst / failure", "Leak", "Fitting failure", "New installation", "Routine service / inspection", "Other"];
+import { HOSE_TYPES, BORES, FITTING_TYPES, ORIENTATIONS, URGENCY, EQUIPMENT_TYPES, JOB_ISSUES } from "./lib/catalog";
+import { defaultPricing, calcEstimate, combinedTotal, calcBookingEstimate } from "./lib/pricing";
+import { emptyAssembly, emptyForm, emptyBookingForm } from "./lib/forms";
+import { supplierFromRow, pricingFromRow, requestFromRow, quoteFromRow, connectionFromRow } from "./lib/rows";
+import { areasMatch, slugify } from "./lib/util";
 
 // Admin & supplier access is by Supabase Auth now (Phase 3a): admin = email in
 // public.app_admin_emails; supplier = suppliers.auth_user_id linked to the
 // signed-in user. See SupplierAuth.
-
-function defaultPricing(scale = 1) {
-  const hose = {};
-  ["hydraulic_oil", "pressure_washer"].forEach((cat) => {
-    BORES[cat].forEach((b, i) => {
-      hose[`${cat}_${b.key}`] = {
-        label: `${cat === "hydraulic_oil" ? "Hydraulic Oil" : "Pressure Washer"} — ${b.label}`,
-        price: Math.round((cat === "hydraulic_oil" ? 12 + i * 6 : 20 + i * 8) * scale),
-        partNumber: "",
-      };
-    });
-  });
-  const fitting = {};
-  const fittingPrices = { "BSP Male": 8, "BSP Female": 9, "JIC 37° Male": 12, "JIC 37° Female": 14, "ORFS Male": 15, "ORFS Female": 17, "NPT Male": 7, "NPT Female": 8, "SAE Flange": 25 };
-  FITTING_TYPES.forEach((f) => (fitting[f] = { label: f, price: Math.round(fittingPrices[f] * scale), partNumber: "" }));
-  return { hose, fitting, labourBase: Math.round(15 * scale), crimpCharge: Math.round(8 * scale), travelBase: Math.round(45 * scale), calloutFee: Math.round(65 * scale), labourHourlyRate: Math.round(85 * scale) };
-}
-
-function emptyAssembly() {
-  return {
-    id: `asm_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-    category: "hydraulic_oil", hoseType: "", bore: "", length: "", quantity: 1, pressure: "",
-    fittingAType: "", fittingAOrientation: "Straight", fittingBType: "", fittingBOrientation: "Straight",
-  };
-}
-
-function emptyForm() {
-  return {
-    assemblies: [emptyAssembly()],
-    urgency: "standard", location: "", selectedSupplierId: "",
-    fieldServiceRequested: false, siteAddress: "", accessNotes: "", fsLabourHoursEstimate: "",
-    name: "", phone: "", email: "", preferredTime: "", notes: "", photoUrl: "",
-  };
-}
-
-function calcEstimate(form, pricing) {
-  if (!pricing) return null;
-  let hoseCost = 0, fittingCost = 0, fittingCount = 0, validAssemblies = 0;
-  const assemblyBreakdown = [];
-  form.assemblies.forEach((a, idx) => {
-    const boreKey = `${a.category}_${a.bore}`;
-    const hoseRule = pricing.hose[boreKey];
-    if (!hoseRule || !a.length) return;
-    const length = parseFloat(a.length) || 0;
-    const qty = parseInt(a.quantity) || 1;
-    const fittingA = pricing.fitting[a.fittingAType];
-    const fittingB = pricing.fitting[a.fittingBType];
-    const aHoseCost = hoseRule.price * length * qty;
-    const aFittingCost = ((fittingA ? fittingA.price : 0) + (fittingB ? fittingB.price : 0)) * qty;
-    hoseCost += aHoseCost;
-    fittingCost += aFittingCost;
-    fittingCount += ((fittingA ? 1 : 0) + (fittingB ? 1 : 0)) * qty;
-    validAssemblies += 1;
-    assemblyBreakdown.push({
-      index: idx, hoseType: a.hoseType, bore: a.bore, length, quantity: qty,
-      hoseCost: aHoseCost, fittingCost: aFittingCost, subtotal: aHoseCost + aFittingCost,
-    });
-  });
-  if (validAssemblies === 0) return null;
-  const labour = pricing.labourBase * validAssemblies;
-  const crimp = pricing.crimpCharge * fittingCount;
-  const urgencyMult = URGENCY.find((u) => u.key === form.urgency)?.mult || 1;
-  const travel = pricing.travelBase * urgencyMult;
-  const callout = form.fieldServiceRequested ? (pricing.calloutFee ?? 65) : 0;
-  const total = hoseCost + fittingCost + labour + crimp + travel;
-  return {
-    hoseCost, fittingCost, labour, crimp, travel, callout, total, assemblyCount: validAssemblies, assemblyBreakdown,
-    low: Math.round(total * 0.92), high: Math.round(total * 1.08),
-  };
-}
-
-function combinedTotal(quote) {
-  const fs = quote.fieldService;
-  if (!fs || !fs.requested) return { low: quote.priceLow, high: quote.priceHigh, hasOnSite: false };
-  const extra = (parseFloat(fs.calloutFee) || 0) + (parseFloat(fs.travelCharge) || 0) + (parseFloat(fs.labour) || 0);
-  return { low: quote.priceLow + extra, high: quote.priceHigh + extra, hasOnSite: true, extra };
-}
-
-function emptyBookingForm() {
-  return {
-    equipmentType: "", issue: "", description: "", labourHoursEstimate: "",
-    urgency: "standard", location: "", selectedSupplierId: "",
-    name: "", phone: "", email: "", preferredTime: "", notes: "", photoUrl: "",
-  };
-}
-
-function calcBookingEstimate(form, pricing) {
-  if (!pricing) return null;
-  const calloutFee = pricing.calloutFee ?? 65;
-  const urgencyMult = URGENCY.find((u) => u.key === form.urgency)?.mult || 1;
-  const travelCharge = Math.round((pricing.travelBase ?? 45) * urgencyMult);
-  const hourlyRate = pricing.labourHourlyRate ?? 85;
-  const labourHours = form.labourHoursEstimate ? (parseFloat(form.labourHoursEstimate) || 0) : 1;
-  const labour = Math.round(labourHours * hourlyRate);
-  const total = calloutFee + travelCharge + labour;
-  return {
-    calloutFee, travelCharge, labour, labourHours, hourlyRate, total,
-    low: Math.round(total * 0.95), high: Math.round(total * 1.05),
-  };
-}
-
-function areasMatch(requestLocation, supplierArea) {
-  const loc = (requestLocation || "").trim().toLowerCase();
-  const area = (supplierArea || "").trim().toLowerCase();
-  if (!area || area === "all" || area === "all areas") return true;
-  if (!loc) return false;
-  return loc.includes(area) || area.includes(loc);
-}
-
-function slugify(label) {
-  return label.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || `item_${Date.now()}`;
-}
 
 function Field({ label, required, error, children, hint }) {
   return (
@@ -171,38 +33,6 @@ const inputClass = (error) =>
   `w-full bg-neutral-900 border rounded-lg px-4 py-3 text-white placeholder-neutral-600 outline-none transition-colors ${
     error ? "border-red-500" : "border-neutral-700 focus:border-orange-500"
   }`;
-
-/* ---------- Supabase <-> app shape mapping ---------- */
-
-function supplierFromRow(r) {
-  return { id: r.id, companyName: r.company_name, serviceArea: r.service_area || "", contactEmail: r.contact_email, contactPhone: r.contact_phone, createdAt: r.created_at };
-}
-function pricingFromRow(r) {
-  return { hose: r.hose || {}, fitting: r.fitting || {}, labourBase: r.labour_base, crimpCharge: r.crimp_charge, travelBase: r.travel_base, calloutFee: r.callout_fee, labourHourlyRate: r.labour_hourly_rate };
-}
-function requestFromRow(r) {
-  return {
-    id: r.id, requestType: r.request_type, status: r.status, selectedSupplierId: r.selected_supplier_id,
-    accessToken: r.access_token,
-    urgency: r.urgency, location: r.location, fieldServiceRequested: r.field_service_requested,
-    siteAddress: r.site_address, accessNotes: r.access_notes, fsLabourHoursEstimate: r.fs_labour_hours_estimate,
-    name: r.name, phone: r.phone, email: r.email, preferredTime: r.preferred_time, notes: r.notes, photoUrl: r.photo_url,
-    assemblies: r.assemblies || [], equipmentType: r.equipment_type, issue: r.issue, description: r.description,
-    labourHoursEstimate: r.labour_hours_estimate, createdAt: r.created_at,
-  };
-}
-function quoteFromRow(r) {
-  return {
-    id: r.id, requestId: r.request_id, supplierId: r.supplier_id, isBooking: r.is_booking,
-    priceLow: r.price_low, priceHigh: r.price_high, leadTimeDays: r.lead_time_days, quoteType: r.quote_type,
-    status: r.status, calloutFee: r.callout_fee, travelCharge: r.travel_charge, labour: r.labour,
-    hoseAssemblyCost: r.hose_assembly_cost, customerLabourHours: r.customer_labour_hours,
-    fieldService: r.field_service, createdAt: r.created_at, completedAt: r.completed_at,
-  };
-}
-function connectionFromRow(r) {
-  return { id: r.id, quoteId: r.quote_id, unlocked: r.unlocked, unlockedAt: r.unlocked_at };
-}
 
 // The supplier email links to /supplier — open straight on that side.
 const initialView =
