@@ -162,6 +162,21 @@ async function onQuoteStatusChange(quote: any, oldStatus: string) {
       );
       break;
     }
+    // The customer accepted a different quote, so this one was auto-declined.
+    // Close the loop with the supplier who priced it.
+    case "declined": {
+      await sendEmail(
+        supplier?.contact_email,
+        `Quote not selected — ${req.id}`,
+        shell(
+          "The customer went with another supplier",
+          `Your quote for <b>${req.id}</b> wasn't selected this time. Thanks for pricing it up —
+           we'll send the next matching request your way.`,
+          { label: "Open supplier portal", url: supplierLink() },
+        ),
+      );
+      break;
+    }
     case "accepted": {
       await sendEmail(
         req.email,
@@ -204,6 +219,31 @@ async function onQuoteStatusChange(quote: any, oldStatus: string) {
   }
 }
 
+// Fired when a supplier prices the on-site portion of an already-confirmed
+// quote (field_service.status: pending/absent -> quoted). The quote's own
+// status doesn't change, so onQuoteStatusChange never sees this.
+async function onFieldServiceQuoted(quote: any) {
+  const req = await getRequest(quote.request_id);
+  if (!req) return;
+  const fs = quote.field_service ?? {};
+  const parts = [
+    fs.calloutFee != null && `$${fs.calloutFee} call-out`,
+    fs.travelCharge != null && `$${fs.travelCharge} travel`,
+    fs.labour != null && `$${fs.labour} labour`,
+  ].filter(Boolean).join(" + ");
+
+  await sendEmail(
+    req.email,
+    `On-site service priced — ${req.id}`,
+    shell(
+      "Your on-site service quote is ready",
+      `The supplier has added the call-out costs for <b>${req.id}</b>${parts ? `: ${parts}` : ""}.
+       Review the full quote and accept when you're ready.`,
+      { label: "View & accept quote", url: customerLink(req) },
+    ),
+  );
+}
+
 // ---------- webhook entrypoint ----------
 
 Deno.serve(async (req) => {
@@ -220,8 +260,17 @@ Deno.serve(async (req) => {
   try {
     if (table === "requests" && type === "INSERT") {
       await onRequestCreated(record);
-    } else if (table === "quotes" && type === "UPDATE" && record?.status !== old_record?.status) {
-      await onQuoteStatusChange(record, old_record?.status);
+    } else if (table === "quotes" && type === "UPDATE") {
+      // assumes the webhook sends a full old_record (REPLICA IDENTITY FULL),
+      // same as the quote-status path already relies on
+      if (record?.status !== old_record?.status) {
+        await onQuoteStatusChange(record, old_record?.status);
+      } else if (
+        record?.field_service?.status === "quoted" &&
+        old_record?.field_service?.status !== "quoted"
+      ) {
+        await onFieldServiceQuoted(record);
+      }
     }
   } catch (e) {
     console.error("[notify] handler error", e);
