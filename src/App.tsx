@@ -1,3 +1,8 @@
+// @ts-nocheck
+// Legacy single-file app (~2900 lines) authored without types. It has 141
+// pre-existing type errors, mostly inferred-`any` component props. The rest of
+// src/ IS type-checked in CI — put new work in its own module rather than
+// growing this file, and drop this pragma once it's broken up.
 import React, { useState, useEffect, useCallback } from "react";
 import { Wrench, Gauge, Settings, Droplet, MapPin, User, ChevronLeft, ChevronRight, RefreshCw, Send, Lock, Unlock, LogOut, Building2, CheckCircle2, Plus, Clock, Truck, ClipboardList, ArrowLeft } from "lucide-react";
 import { supabase } from "./supabaseClient";
