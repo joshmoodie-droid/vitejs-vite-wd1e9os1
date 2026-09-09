@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 
-// These cover routing, rendering and client-side form logic. They read from
-// the live (public, RLS-protected) Supabase project but never write — the full
+// These cover routing, rendering and client-side form logic. In CI they run
+// against the staging Supabase project (never production); the full
 // submit -> quote -> accept flow is intentionally out of scope here.
 
 test("home page shows both entry points", async ({ page }) => {
