@@ -29,6 +29,12 @@ jobs:
 
       - run: npm ci
 
+      - name: Audit dependencies
+        # Fails only on critical for now. The remaining high is a Vite
+        # dev-server advisory that needs the Vite 8 major bump (Dependabot
+        # will open that PR); raise this to --audit-level=high once it lands.
+        run: npm audit --audit-level=critical
+
       - name: Lint
         run: npm run lint
 
