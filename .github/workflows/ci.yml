@@ -9,13 +9,15 @@ jobs:
   build-and-smoke:
     runs-on: ubuntu-latest
 
-    # The Supabase *publishable* key is designed to be public — it ships in
-    # every deployed browser bundle and Supabase documents it as safe to share.
-    # RLS is the security boundary. Set at job level so the Playwright
+    # Points at the **staging** Supabase project (qliapjpxwlcnyjfwfdor), never
+    # production — CI reads and (in the RLS test) writes to it. Its schema is a
+    # copy of prod (see supabase/migrations/0000_baseline.sql + supabase/seed.sql).
+    # The publishable key is designed to be public: it ships in every browser
+    # bundle and RLS is the security boundary. Set at job level so the Playwright
     # webServer's own `npm run build` inherits it too.
     env:
-      VITE_SUPABASE_URL: https://qwycavfmdpknnflxlylw.supabase.co
-      VITE_SUPABASE_ANON_KEY: sb_publishable_omCeR7NRSVq6zIoqcGi3Aw_d9L-IWno
+      VITE_SUPABASE_URL: https://qliapjpxwlcnyjfwfdor.supabase.co
+      VITE_SUPABASE_ANON_KEY: sb_publishable_FslekN5xomot4WyDVo6cUw_DX-xmul-
 
     steps:
       - uses: actions/checkout@v4
