@@ -38,6 +38,13 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Drop the runner's Google Chrome apt source
+        # `playwright install --with-deps` runs `apt-get update`; the runner
+        # image pre-adds dl.google.com/linux/chrome, which periodically serves a
+        # mismatched Packages index and fails the whole step. We don't need it —
+        # Playwright ships its own Chromium.
+        run: sudo rm -f /etc/apt/sources.list.d/*google-chrome*
+
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
 
