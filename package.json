@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "lint": "oxlint",
     "typecheck": "tsc -b",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:rls": "node scripts/rls-check.mjs"
   },
   "dependencies": {
     "@sentry/react": "^10.73.0",
