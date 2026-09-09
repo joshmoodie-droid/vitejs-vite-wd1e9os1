@@ -9,14 +9,30 @@
 //           → Edge Functions → Via Editor and click Deploy)
 // Secrets:  RESEND_API_KEY, APP_URL, EMAIL_FROM  — set in Dashboard →
 //           Edge Functions → Secrets (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY
-//           are injected automatically).
+//           are injected automatically). SENTRY_DSN is optional — set it to send
+//           handler crashes and Resend failures to Sentry; leave it unset and
+//           this is a no-op.
 // -------------------------------------------------------------------
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import * as Sentry from "npm:@sentry/deno@10.74.0";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const APP_URL = (Deno.env.get("APP_URL") ?? "http://localhost:5173").replace(/\/$/, "");
 const EMAIL_FROM = Deno.env.get("EMAIL_FROM") ?? "HoseQuote <onboarding@resend.dev>";
+
+// Error monitoring. No-op unless SENTRY_DSN is set (local `supabase functions
+// serve` and any project without the secret stay quiet). The DSN is a
+// write-only ingest key.
+const SENTRY_DSN = Deno.env.get("SENTRY_DSN") ?? "";
+if (SENTRY_DSN) {
+  Sentry.init({
+    dsn: SENTRY_DSN,
+    environment: Deno.env.get("SENTRY_ENVIRONMENT") ?? "production",
+    sendDefaultPii: false,
+    tracesSampleRate: 0,
+  });
+}
 
 const admin = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -39,7 +55,20 @@ async function sendEmail(to: string | null | undefined, subject: string, html: s
     },
     body: JSON.stringify({ from: EMAIL_FROM, to, subject, html }),
   });
-  if (!res.ok) console.error(`[notify] Resend error ${res.status}: ${await res.text()}`);
+  if (!res.ok) {
+    const body = await res.text();
+    console.error(`[notify] Resend error ${res.status}: ${body}`);
+    Sentry.captureMessage(`Resend send failed (${res.status})`, {
+      level: "error",
+      extra: {
+        status: res.status,
+        // response body only — no recipient address (customer PII)
+        body: body.slice(0, 500),
+        subject,
+        toDomain: to.includes("@") ? to.split("@")[1] : "(none)",
+      },
+    });
+  }
 }
 
 // ---------- templates ----------
@@ -197,6 +226,15 @@ Deno.serve(async (req) => {
   } catch (e) {
     console.error("[notify] handler error", e);
     // 200 anyway so Supabase doesn't hammer retries; errors are in the logs.
+    Sentry.captureException(e, {
+      tags: { table, type },
+      // ids like HQ-xxx / quote ids — not PII
+      extra: { record_id: record?.id, request_id: record?.request_id },
+    });
+  } finally {
+    // the runtime can freeze the isolate right after we respond, so make sure
+    // anything queued actually leaves first
+    if (SENTRY_DSN) await Sentry.flush(2000);
   }
 
   return new Response(JSON.stringify({ ok: true }), {
