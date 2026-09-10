@@ -5,7 +5,7 @@
 import { Field, inputClass } from "./ui";
 import { HOSE_TYPES, BORES, FITTING_TYPES, ORIENTATIONS } from "../lib/catalog";
 
-export function AssemblyCard({ assembly: a, index, errors, onChange, onRemove }) {
+export function AssemblyCard({ assembly: a, index, errors, onChange, onRemove }: any) {
   const ek = (field) => errors[`asm_${index}_${field}`];
   return (
     <div className="border border-neutral-800 rounded-lg p-4">
