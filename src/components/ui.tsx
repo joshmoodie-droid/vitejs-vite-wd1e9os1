@@ -1,8 +1,11 @@
 // Shared presentational primitives. No state, no data — extracted verbatim
 // from App.tsx. Dark-theme Tailwind classes; `SectionTitle` takes a lucide
 // icon component as the `icon` prop.
+//
+// Props are `: any` — these came out of an untyped file and the whole app is
+// still loosely typed; tighten them when the surrounding code is typed.
 
-export function Field({ label, required, error, children, hint }) {
+export function Field({ label, required, error, children, hint }: any) {
   return (
     <div className="mb-5">
       <label className="block text-sm text-white mb-2">
@@ -15,12 +18,12 @@ export function Field({ label, required, error, children, hint }) {
   );
 }
 
-export const inputClass = (error) =>
+export const inputClass = (error?: any) =>
   `w-full bg-neutral-900 border rounded-lg px-4 py-3 text-white placeholder-neutral-600 outline-none transition-colors ${
     error ? "border-red-500" : "border-neutral-700 focus:border-orange-500"
   }`;
 
-export function StepDot({ n, active, done }) {
+export function StepDot({ n, active, done }: any) {
   return (
     <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold border-2 ${
       done ? "bg-orange-500 border-orange-500 text-black" : active ? "border-orange-500 text-orange-500" : "border-neutral-700 text-neutral-600"
@@ -30,7 +33,7 @@ export function StepDot({ n, active, done }) {
   );
 }
 
-export function SectionTitle({ icon: Icon, title, subtitle }) {
+export function SectionTitle({ icon: Icon, title, subtitle }: any) {
   return (
     <div className="mb-5">
       <div className="flex items-center gap-2 text-white font-bold text-lg mb-1">
@@ -41,7 +44,7 @@ export function SectionTitle({ icon: Icon, title, subtitle }) {
   );
 }
 
-export function Badge({ tone, children }) {
+export function Badge({ tone, children }: any) {
   const tones = {
     red: "bg-red-500/15 text-red-400",
     amber: "bg-amber-500/15 text-amber-400",
