@@ -47,7 +47,7 @@ export function AssemblyPriceBreakdown({ r, pricing }) {
   );
 }
 
-export function ManufacturingSpec({ r, compact }) {
+export function ManufacturingSpec({ r, compact }: any) {
   const assemblies = r.assemblies || [];
   return (
     <div className={`bg-black/30 rounded-lg p-3 text-sm space-y-2 ${compact ? "mb-3" : "mb-3"}`}>
