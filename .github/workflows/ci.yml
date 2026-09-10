@@ -24,16 +24,15 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - run: npm ci
 
       - name: Audit dependencies
-        # Fails only on critical for now. The remaining high is a Vite
-        # dev-server advisory that needs the Vite 8 major bump (Dependabot
-        # will open that PR); raise this to --audit-level=high once it lands.
-        run: npm audit --audit-level=critical
+        # Vite 8 cleared the last known advisory; tree is clean at time of
+        # writing. Fail the build on anything high or above.
+        run: npm audit --audit-level=high
 
       - name: Lint
         run: npm run lint
