@@ -2,6 +2,7 @@
 // - CustomerFlow: multi-step hose-assembly quote wizard + post-submit quote view
 // - BookingFlow: multi-step field-service booking wizard + post-submit view
 
+import { useEffect, useRef } from "react";
 import { Send, Clock, ChevronLeft, ChevronRight, MapPin, User, Wrench, Gauge, Droplet, Truck, ClipboardList, Plus, ArrowLeft } from "lucide-react";
 import { areasMatch } from "../lib/util";
 import { calcEstimate, combinedTotal, calcBookingEstimate } from "../lib/pricing";
@@ -12,6 +13,18 @@ import { AssemblyCard } from "./AssemblyCard";
 import { FieldServiceSection } from "./FieldServiceSection";
 
 export function CustomerFlow({ form, update, errors, step, next, back, submit, updateAssembly, addAssembly, removeAssembly, suppliers, pricingBySupplier, submittedRequestId, resetWizard, quotes, acceptQuote, requestFieldService, confirmFieldService, onBack }: any) {
+  // The on-site toggle reveals the site-address fields directly below it —
+  // with no scroll or transition, that reveal is easy to miss if the toggle
+  // is near the bottom of the viewport (it read as "clicking it doesn't do
+  // anything" in practice). Scroll the revealed section into view so the
+  // effect of the toggle is unmistakable.
+  const onSiteFieldsRef = useRef(null);
+  useEffect(() => {
+    if (form.fieldServiceRequested) {
+      onSiteFieldsRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [form.fieldServiceRequested]);
+
   const previewQuotes = suppliers
     .filter((s) => areasMatch(form.location, s.serviceArea))
     .map((s) => ({ supplierId: s.id, est: calcEstimate(form, pricingBySupplier[s.id]) }))
@@ -217,7 +230,7 @@ export function CustomerFlow({ form, update, errors, step, next, back, submit, u
             </button>
 
             {form.fieldServiceRequested && (
-              <>
+              <div ref={onSiteFieldsRef}>
                 <Field label="Site Address" required error={errors.siteAddress}>
                   <input placeholder="Full address for the callout" className={inputClass(errors.siteAddress)} value={form.siteAddress} onChange={(e) => update("siteAddress", e.target.value)} />
                 </Field>
@@ -230,7 +243,7 @@ export function CustomerFlow({ form, update, errors, step, next, back, submit, u
                     <div className="px-4 py-3 bg-neutral-800 border border-neutral-700 rounded-lg text-neutral-400 whitespace-nowrap">hours</div>
                   </div>
                 </Field>
-              </>
+              </div>
             )}
           </>
         )}
