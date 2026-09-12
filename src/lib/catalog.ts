@@ -13,6 +13,7 @@ export const BORES = {
     { key: "1_2", label: '1/2" (13mm)' },
     { key: "5_8", label: '5/8" (16mm)' },
     { key: "3_4", label: '3/4" (19mm)' },
+    { key: "1", label: '1" (25mm)' },
   ],
   pressure_washer: [
     { key: "1_4", label: '1/4" (6mm)' },
@@ -22,6 +23,22 @@ export const BORES = {
 };
 
 export const FITTING_TYPES = ["BSP Male", "BSP Female", "JIC 37° Male", "JIC 37° Female", "ORFS Male", "ORFS Female", "NPT Male", "NPT Female", "SAE Flange"];
+
+// A hose tail's size always matches the hose it's fitted to, so fittings are
+// priced per (type, bore) pair rather than by type alone — e.g. a 3/8" BSP
+// Female tail is priced separately from a 1/2" BSP Female tail. This is the
+// same size list as BORES.hydraulic_oil, kept as its own export because
+// fitting sizing is a physical-diameter concept independent of hose category
+// (pressure-washer hose only spans a subset of these sizes, but its fittings
+// still come in all of them).
+export const FITTING_BORES = [
+  { key: "1_4", label: '1/4" (6mm)' },
+  { key: "3_8", label: '3/8" (10mm)' },
+  { key: "1_2", label: '1/2" (13mm)' },
+  { key: "5_8", label: '5/8" (16mm)' },
+  { key: "3_4", label: '3/4" (19mm)' },
+  { key: "1", label: '1" (25mm)' },
+];
 export const ORIENTATIONS = ["Straight", "45° Bend", "90° Bend"];
 export const URGENCY = [
   { key: "standard", label: "Standard", desc: "Normal turnaround", mult: 1 },
