@@ -3,10 +3,23 @@
 // Extracted verbatim from App.tsx.
 
 import { Field, inputClass } from "./ui";
-import { HOSE_TYPES, BORES, FITTING_TYPES, ORIENTATIONS } from "../lib/catalog";
+import { HOSE_TYPES, BORES, FITTING_TYPES, ORIENTATIONS, fittingBoresFor } from "../lib/catalog";
 
 export function AssemblyCard({ assembly: a, index, errors, onChange, onRemove }: any) {
   const ek = (field) => errors[`asm_${index}_${field}`];
+  const isFittingAvailable = (fittingType) => !a.bore || fittingBoresFor(fittingType).some((b) => b.key === a.bore);
+  const onBoreChange = (bore) => {
+    onChange("bore", bore);
+    // Some fitting types (e.g. SAE flanges) aren't made in every size — drop
+    // a selection that's no longer valid at the new bore rather than leave a
+    // stale, impossible combination in place.
+    ["A", "B"].forEach((side) => {
+      const type = a[`fitting${side}Type`];
+      if (type && !fittingBoresFor(type).some((b) => b.key === bore)) {
+        onChange(`fitting${side}Type`, "");
+      }
+    });
+  };
   return (
     <div className="border border-neutral-800 rounded-lg p-4">
       <div className="flex items-center justify-between mb-3">
@@ -35,7 +48,7 @@ export function AssemblyCard({ assembly: a, index, errors, onChange, onRemove }:
         </select>
       </Field>
       <Field label="Internal Diameter / Bore" required error={ek("bore")}>
-        <select className={inputClass(ek("bore"))} value={a.bore} onChange={(e) => onChange("bore", e.target.value)}>
+        <select className={inputClass(ek("bore"))} value={a.bore} onChange={(e) => onBoreChange(e.target.value)}>
           <option className="bg-neutral-900 text-white" value="">Select bore...</option>
           {BORES[a.category].map((b) => <option className="bg-neutral-900 text-white" key={b.key} value={b.key}>{b.label}</option>)}
         </select>
@@ -61,7 +74,7 @@ export function AssemblyCard({ assembly: a, index, errors, onChange, onRemove }:
           <Field label="Type" required error={ek(`fitting${side}Type`)}>
             <select className={inputClass(ek(`fitting${side}Type`))} value={a[`fitting${side}Type`]} onChange={(e) => onChange(`fitting${side}Type`, e.target.value)}>
               <option className="bg-neutral-900 text-white" value="">Select fitting...</option>
-              {FITTING_TYPES.map((f) => <option className="bg-neutral-900 text-white" key={f} value={f}>{f}</option>)}
+              {FITTING_TYPES.filter(isFittingAvailable).map((f) => <option className="bg-neutral-900 text-white" key={f} value={f}>{f}</option>)}
             </select>
           </Field>
           <Field label="Orientation" required>

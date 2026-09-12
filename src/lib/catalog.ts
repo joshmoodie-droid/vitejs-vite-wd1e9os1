@@ -22,7 +22,9 @@ export const BORES = {
   ],
 };
 
-export const FITTING_TYPES = ["BSP Male", "BSP Female", "JIC 37° Male", "JIC 37° Female", "ORFS Male", "ORFS Female", "NPT Male", "NPT Female", "SAE Flange"];
+// SAE Flange comes in two incompatible bolt patterns/pressure ratings —
+// Code 61 and Code 62 — priced and stocked separately.
+export const FITTING_TYPES = ["BSP Male", "BSP Female", "JIC 37° Male", "JIC 37° Female", "ORFS Male", "ORFS Female", "NPT Male", "NPT Female", "SAE Flange Code 61", "SAE Flange Code 62"];
 
 // A hose tail's size always matches the hose it's fitted to, so fittings are
 // priced per (type, bore) pair rather than by type alone — e.g. a 3/8" BSP
@@ -39,6 +41,14 @@ export const FITTING_BORES = [
   { key: "3_4", label: '3/4" (19mm)' },
   { key: "1", label: '1" (25mm)' },
 ];
+
+// SAE flanges (both codes) aren't made below 1/2" — every other fitting
+// type spans the full FITTING_BORES range above.
+const FLANGE_BORES = FITTING_BORES.filter((b) => b.key !== "1_4" && b.key !== "3_8");
+export function fittingBoresFor(fittingType) {
+  return fittingType.startsWith("SAE Flange") ? FLANGE_BORES : FITTING_BORES;
+}
+
 export const ORIENTATIONS = ["Straight", "45° Bend", "90° Bend"];
 export const URGENCY = [
   { key: "standard", label: "Standard", desc: "Normal turnaround", mult: 1 },
