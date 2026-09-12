@@ -1,6 +1,15 @@
 // Quote / booking price estimation. Pure functions, extracted verbatim from App.tsx.
 
-import { BORES, FITTING_TYPES, URGENCY } from "./catalog";
+import { BORES, FITTING_TYPES, FITTING_BORES, URGENCY } from "./catalog";
+import { slugify } from "./util";
+
+// Fittings are priced per (type, bore) pair — a hose tail's size always
+// matches the hose it's on, so e.g. a 3/8" BSP Female tail and a 1/2" BSP
+// Female tail get separate prices. Keyed the same way pricing.hose already
+// keys by `${category}_${bore}`.
+export function fittingPriceKey(fittingType, boreKey) {
+  return `${slugify(fittingType)}_${boreKey}`;
+}
 
 export function defaultPricing(scale = 1) {
   const hose = {};
@@ -15,7 +24,15 @@ export function defaultPricing(scale = 1) {
   });
   const fitting = {};
   const fittingPrices = { "BSP Male": 8, "BSP Female": 9, "JIC 37° Male": 12, "JIC 37° Female": 14, "ORFS Male": 15, "ORFS Female": 17, "NPT Male": 7, "NPT Female": 8, "SAE Flange": 25 };
-  FITTING_TYPES.forEach((f) => (fitting[f] = { label: f, price: Math.round(fittingPrices[f] * scale), partNumber: "" }));
+  FITTING_TYPES.forEach((f) => {
+    FITTING_BORES.forEach((b) => {
+      fitting[fittingPriceKey(f, b.key)] = {
+        label: `${f} — ${b.label}`,
+        price: Math.round(fittingPrices[f] * scale),
+        partNumber: "",
+      };
+    });
+  });
   return { hose, fitting, labourBase: Math.round(15 * scale), crimpCharge: Math.round(8 * scale), travelBase: Math.round(45 * scale), calloutFee: Math.round(65 * scale), labourHourlyRate: Math.round(85 * scale) };
 }
 
@@ -29,8 +46,8 @@ export function calcEstimate(form, pricing) {
     if (!hoseRule || !a.length) return;
     const length = parseFloat(a.length) || 0;
     const qty = parseInt(a.quantity) || 1;
-    const fittingA = pricing.fitting[a.fittingAType];
-    const fittingB = pricing.fitting[a.fittingBType];
+    const fittingA = pricing.fitting[fittingPriceKey(a.fittingAType, a.bore)];
+    const fittingB = pricing.fitting[fittingPriceKey(a.fittingBType, a.bore)];
     const aHoseCost = hoseRule.price * length * qty;
     const aFittingCost = ((fittingA ? fittingA.price : 0) + (fittingB ? fittingB.price : 0)) * qty;
     hoseCost += aHoseCost;
