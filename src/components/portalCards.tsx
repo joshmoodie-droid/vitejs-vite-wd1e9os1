@@ -139,7 +139,7 @@ export function RequestCard({ r, myQuote, pricing, onSubmitManualQuote, onConfir
 
       {myQuote ? (
         myQuote.status === "pending" && myQuote.quoteType === "auto" ? (
-          <AutoQuoteReview quote={myQuote} onConfirmQuote={onConfirmQuote} onRejectQuote={onRejectQuote} />
+          <AutoQuoteReview quote={myQuote} request={r} pricing={pricing} onConfirmQuote={onConfirmQuote} onRejectQuote={onRejectQuote} />
         ) : (
           <div className="text-sm text-emerald-400 font-semibold flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4" /> Quoted: ${myQuote.priceLow} – ${myQuote.priceHigh} ({myQuote.quoteType})</div>
         )

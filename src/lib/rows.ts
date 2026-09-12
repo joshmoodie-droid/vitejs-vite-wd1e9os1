@@ -23,7 +23,7 @@ export function quoteFromRow(r) {
     id: r.id, requestId: r.request_id, supplierId: r.supplier_id, isBooking: r.is_booking,
     priceLow: r.price_low, priceHigh: r.price_high, leadTimeDays: r.lead_time_days, quoteType: r.quote_type,
     status: r.status, calloutFee: r.callout_fee, travelCharge: r.travel_charge, labour: r.labour,
-    hoseAssemblyCost: r.hose_assembly_cost, customerLabourHours: r.customer_labour_hours,
+    hoseAssemblyCost: r.hose_assembly_cost, deliveryCharge: r.delivery_charge, customerLabourHours: r.customer_labour_hours,
     fieldService: r.field_service, createdAt: r.created_at, completedAt: r.completed_at,
   };
 }

@@ -5,6 +5,7 @@
 
 import { useState } from "react";
 import { inputClass } from "./ui";
+import { calcEstimate } from "../lib/pricing";
 
 export function ActiveQuoteEditor({ quote, onSave }: any) {
   const [priceLow, setPriceLow] = useState(quote.priceLow ?? 0);
@@ -134,14 +135,24 @@ export function SupplierFieldServiceReview({ quote, pricing, onUpdate }: any) {
   );
 }
 
-export function AutoQuoteReview({ quote, onConfirmQuote, onRejectQuote }: any) {
-  const [priceLow, setPriceLow] = useState(quote.priceLow ?? 0);
-  const [priceHigh, setPriceHigh] = useState(quote.priceHigh ?? 0);
+export function AutoQuoteReview({ quote, request, pricing, onConfirmQuote, onRejectQuote }: any) {
   const [leadTime, setLeadTime] = useState(quote.leadTimeDays ?? 3);
   const [calloutFee, setCalloutFee] = useState(quote.calloutFee ?? 65);
   const [travelCharge, setTravelCharge] = useState(quote.travelCharge ?? 45);
   const [labourHours, setLabourHours] = useState(quote.customerLabourHours || 1);
   const [hourlyRate, setHourlyRate] = useState(85);
+
+  // Recompute the same itemized breakdown used to auto-generate this quote
+  // (hose+fittings, labour, travel, delivery) so the supplier is editing real
+  // cost components rather than a single blind low/high range. On-site
+  // callout/travel is deliberately excluded here — that's reviewed later via
+  // SupplierFieldServiceReview once the customer's confirmed base quote exists.
+  const est = (!quote.isBooking && request && pricing) ? calcEstimate(request, pricing) : null;
+  const showDelivery = !!request && !request.fieldServiceRequested && request.fulfillment === "delivery";
+  const [hoseAssembly, setHoseAssembly] = useState(Math.round((est?.hoseCost ?? 0) + (est?.fittingCost ?? 0) + (est?.crimp ?? 0)));
+  const [itemLabour, setItemLabour] = useState(Math.round(est?.labour ?? 0));
+  const [itemTravel, setItemTravel] = useState(Math.round(est?.travel ?? 0));
+  const [delivery, setDelivery] = useState(Math.round(est?.delivery ?? 0));
 
   if (quote.isBooking) {
     const labour = Math.round((parseFloat(labourHours) || 0) * (parseFloat(hourlyRate) || 0));
@@ -202,10 +213,18 @@ export function AutoQuoteReview({ quote, onConfirmQuote, onRejectQuote }: any) {
     );
   }
 
+  const total = (parseFloat(hoseAssembly) || 0) + (parseFloat(itemLabour) || 0) + (parseFloat(itemTravel) || 0) + (showDelivery ? (parseFloat(delivery) || 0) : 0);
+  const low = Math.round(total * 0.92);
+  const high = Math.round(total * 1.08);
+
   const confirm = () => {
     onConfirmQuote(quote.id, {
-      priceLow: parseFloat(priceLow) || 0,
-      priceHigh: parseFloat(priceHigh) || 0,
+      hoseAssemblyCost: parseFloat(hoseAssembly) || 0,
+      labour: parseFloat(itemLabour) || 0,
+      travelCharge: parseFloat(itemTravel) || 0,
+      ...(showDelivery ? { deliveryCharge: parseFloat(delivery) || 0 } : {}),
+      priceLow: low,
+      priceHigh: high,
       leadTimeDays: parseInt(leadTime) || 1,
     });
   };
@@ -213,19 +232,33 @@ export function AutoQuoteReview({ quote, onConfirmQuote, onRejectQuote }: any) {
   return (
     <div className="space-y-3 mt-1">
       <div className="text-xs text-neutral-500 uppercase tracking-wide font-semibold">Review pricing before sending to customer</div>
+      <div>
+        <label className="text-xs text-neutral-500 block mb-1">Hose assembly $ (hose, fittings &amp; crimping)</label>
+        <input type="number" className={inputClass()} value={hoseAssembly} onChange={(e) => setHoseAssembly(e.target.value)} />
+      </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="text-xs text-neutral-500 block mb-1">Low $</label>
-          <input type="number" className={inputClass()} value={priceLow} onChange={(e) => setPriceLow(e.target.value)} />
+          <label className="text-xs text-neutral-500 block mb-1">Labour $</label>
+          <input type="number" className={inputClass()} value={itemLabour} onChange={(e) => setItemLabour(e.target.value)} />
         </div>
         <div>
-          <label className="text-xs text-neutral-500 block mb-1">High $</label>
-          <input type="number" className={inputClass()} value={priceHigh} onChange={(e) => setPriceHigh(e.target.value)} />
+          <label className="text-xs text-neutral-500 block mb-1">Travel $</label>
+          <input type="number" className={inputClass()} value={itemTravel} onChange={(e) => setItemTravel(e.target.value)} />
         </div>
       </div>
+      {showDelivery && (
+        <div>
+          <label className="text-xs text-neutral-500 block mb-1">Delivery fee $</label>
+          <input type="number" className={inputClass()} value={delivery} onChange={(e) => setDelivery(e.target.value)} />
+        </div>
+      )}
       <div>
         <label className="text-xs text-neutral-500 block mb-1">Lead time (days)</label>
         <input type="number" className={inputClass()} value={leadTime} onChange={(e) => setLeadTime(e.target.value)} />
+      </div>
+      <div className="flex items-center justify-between pt-1 border-t border-neutral-800">
+        <span className="text-sm font-bold text-orange-500">Total to customer</span>
+        <span className="text-lg font-extrabold text-orange-500">${low} – ${high}</span>
       </div>
       <div className="flex gap-2">
         <button onClick={confirm} className="flex-1 bg-orange-500 hover:bg-orange-600 text-black font-bold py-2.5 rounded-lg transition-colors">Confirm &amp; send to customer</button>
