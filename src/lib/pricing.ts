@@ -1,6 +1,6 @@
 // Quote / booking price estimation. Pure functions, extracted verbatim from App.tsx.
 
-import { BORES, FITTING_TYPES, FITTING_BORES, URGENCY } from "./catalog";
+import { BORES, FITTING_TYPES, fittingBoresFor, URGENCY } from "./catalog";
 import { slugify } from "./util";
 
 // Fittings are priced per (type, bore) pair — a hose tail's size always
@@ -23,9 +23,9 @@ export function defaultPricing(scale = 1) {
     });
   });
   const fitting = {};
-  const fittingPrices = { "BSP Male": 8, "BSP Female": 9, "JIC 37° Male": 12, "JIC 37° Female": 14, "ORFS Male": 15, "ORFS Female": 17, "NPT Male": 7, "NPT Female": 8, "SAE Flange": 25 };
+  const fittingPrices = { "BSP Male": 8, "BSP Female": 9, "JIC 37° Male": 12, "JIC 37° Female": 14, "ORFS Male": 15, "ORFS Female": 17, "NPT Male": 7, "NPT Female": 8, "SAE Flange Code 61": 25, "SAE Flange Code 62": 28 };
   FITTING_TYPES.forEach((f) => {
-    FITTING_BORES.forEach((b) => {
+    fittingBoresFor(f).forEach((b) => {
       fitting[fittingPriceKey(f, b.key)] = {
         label: `${f} — ${b.label}`,
         price: Math.round(fittingPrices[f] * scale),
