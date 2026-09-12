@@ -6,6 +6,44 @@ import { useState, useEffect } from "react";
 import { Plus } from "lucide-react";
 import { Field, inputClass } from "./ui";
 import { slugify } from "../lib/util";
+import { BORES, FITTING_TYPES, FITTING_BORES } from "../lib/catalog";
+
+// Postgres's jsonb storage doesn't preserve key insertion order, so
+// Object.entries(pricing.hose / pricing.fitting) comes back in whatever
+// order jsonb happens to store keys in (roughly alphabetical -- "1" before
+// "1_2" before "1_4" before "3_4" -- not size order). Re-sort rows here:
+// grouped by hose category / fitting type (in the same order customers see
+// them), smallest to largest size within each group.
+const SIZE_ORDER = FITTING_BORES.map((b) => b.key); // ["1_4","3_8","1_2","5_8","3_4","1"]
+const GROUP_ORDER = [...Object.keys(BORES), ...FITTING_TYPES.map(slugify)];
+
+function parseSizeKey(key) {
+  // Check longer size suffixes first so e.g. "_1" can't shadow "_1_2"/"_1_4"
+  // (not actually ambiguous since the tails differ, but cheap to be sure).
+  const bySizeLength = [...SIZE_ORDER].sort((a, b) => b.length - a.length);
+  for (const size of bySizeLength) {
+    const suffix = `_${size}`;
+    if (key.endsWith(suffix)) {
+      return { group: key.slice(0, -suffix.length), sizeIndex: SIZE_ORDER.indexOf(size) };
+    }
+  }
+  return { group: key, sizeIndex: -1 }; // custom row added via "Add ... type" — no recognized size
+}
+
+function sortPricingEntries(data) {
+  const firstSeen = new Map();
+  const parsed = Object.entries(data).map(([key, item], idx) => {
+    const { group, sizeIndex } = parseSizeKey(key);
+    if (!firstSeen.has(group)) firstSeen.set(group, idx);
+    return { key, item, group, sizeIndex, idx };
+  });
+  const groupRank = (group) => {
+    const known = GROUP_ORDER.indexOf(group);
+    return known === -1 ? GROUP_ORDER.length + firstSeen.get(group) : known;
+  };
+  parsed.sort((a, b) => groupRank(a.group) - groupRank(b.group) || a.sizeIndex - b.sizeIndex || a.idx - b.idx);
+  return parsed.map(({ key, item }) => [key, item]);
+}
 
 export function PricingAdmin({ pricing, onSave }: any) {
   const [local, setLocal] = useState(pricing);
@@ -96,7 +134,7 @@ function PricingGroup({ title, data, onChange, onAdd, addLabel }: any) {
       )}
 
       <div className="divide-y divide-neutral-800">
-        {Object.entries(data).map(([key, item]: [string, any]) => (
+        {sortPricingEntries(data).map(([key, item]: [string, any]) => (
           <div key={key} className="py-3">
             <input
               className="w-full bg-neutral-800 border border-neutral-700 focus:border-orange-500 rounded-lg text-white text-sm font-medium mb-2 px-3 py-2 outline-none transition-colors"
