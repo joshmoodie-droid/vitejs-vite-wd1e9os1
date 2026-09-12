@@ -296,7 +296,8 @@ export default function HoseQuoteApp() {
     if (overrides.hoseAssemblyCost !== undefined) row.hose_assembly_cost = overrides.hoseAssemblyCost;
     if (overrides.deliveryCharge !== undefined) row.delivery_charge = overrides.deliveryCharge;
     row.status = "confirmed";
-    await supabase.from("quotes").update(row).eq("id", quoteId);
+    const { error } = await supabase.from("quotes").update(row).eq("id", quoteId);
+    if (error) { console.error("Confirm quote failed", error); return; }
     setQuotes((qs) => qs.map((q) => (q.id === quoteId ? { ...q, ...overrides, status: "confirmed" } : q)));
   };
 
@@ -313,7 +314,8 @@ export default function HoseQuoteApp() {
     if (overrides.labour !== undefined) row.labour = overrides.labour;
     if (overrides.hoseAssemblyCost !== undefined) row.hose_assembly_cost = overrides.hoseAssemblyCost;
     if (overrides.deliveryCharge !== undefined) row.delivery_charge = overrides.deliveryCharge;
-    await supabase.from("quotes").update(row).eq("id", quoteId);
+    const { error } = await supabase.from("quotes").update(row).eq("id", quoteId);
+    if (error) { console.error("Edit quote failed", error); return; }
     setQuotes((qs) => qs.map((q) => (q.id === quoteId ? { ...q, ...overrides } : q)));
   };
 
