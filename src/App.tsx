@@ -197,7 +197,7 @@ export default function HoseQuoteApp() {
   };
 
   function pricingToRow(p) {
-    return { hose: p.hose, fitting: p.fitting, labour_base: p.labourBase, crimp_charge: p.crimpCharge, travel_base: p.travelBase, callout_fee: p.calloutFee, labour_hourly_rate: p.labourHourlyRate };
+    return { hose: p.hose, fitting: p.fitting, labour_base: p.labourBase, crimp_charge: p.crimpCharge, travel_base: p.travelBase, callout_fee: p.calloutFee, labour_hourly_rate: p.labourHourlyRate, delivery_fee: p.deliveryFee };
   }
 
   const update = (key, value) => setForm((f) => ({ ...f, [key]: value }));
@@ -224,6 +224,7 @@ export default function HoseQuoteApp() {
       if (!form.location) e.location = "Enter a suburb or postcode.";
       if (!form.selectedSupplierId) e.selectedSupplierId = "Select a supplier to continue.";
       if (form.fieldServiceRequested && !form.siteAddress) e.siteAddress = "Enter the site address for the callout.";
+      if (!form.fieldServiceRequested && form.fulfillment === "delivery" && !form.deliveryAddress) e.deliveryAddress = "Enter the delivery address.";
     }
     if (s === 3) {
       if (!form.name) e.name = "Enter your full name.";
@@ -247,6 +248,9 @@ export default function HoseQuoteApp() {
       customer_id: customer?.id ?? null,
       urgency: form.urgency, location: form.location, field_service_requested: form.fieldServiceRequested,
       site_address: form.siteAddress, access_notes: form.accessNotes, fs_labour_hours_estimate: form.fsLabourHoursEstimate,
+      fulfillment: form.fieldServiceRequested ? "pickup" : form.fulfillment,
+      delivery_address: !form.fieldServiceRequested && form.fulfillment === "delivery" ? form.deliveryAddress : null,
+      delivery_notes: !form.fieldServiceRequested && form.fulfillment === "delivery" ? form.deliveryNotes : null,
       name: form.name, phone: form.phone, email: form.email, preferred_time: form.preferredTime,
       notes: form.notes, photo_url: form.photoUrl, assemblies: form.assemblies,
     };

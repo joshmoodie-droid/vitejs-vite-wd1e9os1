@@ -80,6 +80,9 @@ export function PricingAdmin({ pricing, onSave }: any) {
           <Field label="Callout Fee ($ default, on-site jobs)">
             <input type="number" className={inputClass()} value={local.calloutFee ?? 65} onChange={(e) => setLocal((p) => ({ ...p, calloutFee: parseFloat(e.target.value) || 0 }))} />
           </Field>
+          <Field label="Delivery Fee ($ default, postage/courier)">
+            <input type="number" className={inputClass()} value={local.deliveryFee ?? 15} onChange={(e) => setLocal((p) => ({ ...p, deliveryFee: parseFloat(e.target.value) || 0 }))} />
+          </Field>
           <Field label="Labour Hourly Rate ($ / hour, field service)">
             <input type="number" className={inputClass()} value={local.labourHourlyRate ?? 85} onChange={(e) => setLocal((p) => ({ ...p, labourHourlyRate: parseFloat(e.target.value) || 0 }))} />
           </Field>

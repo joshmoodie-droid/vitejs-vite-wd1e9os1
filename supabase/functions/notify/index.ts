@@ -104,9 +104,27 @@ async function getSupplier(id: string | null) {
 
 // ---------- event handlers ----------
 
+// Self-install hose quotes carry a pickup/delivery choice (on-site jobs
+// don't — the technician handles the assembly, so there's nothing to
+// collect or ship). Shared by the customer and supplier creation emails.
+function fulfillmentNote(req: any): string {
+  if (req.request_type !== "quote" || req.field_service_requested) return "";
+  return req.fulfillment === "delivery"
+    ? `You've asked for it to be <b>delivered</b> to ${req.delivery_address || "your address"}.`
+    : `You've asked to <b>pick it up</b> once it's ready.`;
+}
+function fulfillmentSupplierNote(req: any): string {
+  if (req.request_type !== "quote" || req.field_service_requested) return "";
+  return req.fulfillment === "delivery"
+    ? `Fulfillment: deliver to ${req.delivery_address || "(no address given)"}${req.delivery_notes ? ` — ${req.delivery_notes}` : ""}.`
+    : `Fulfillment: customer will pick up.`;
+}
+
 async function onRequestCreated(req: any) {
   const supplier = await getSupplier(req.selected_supplier_id);
   const kind = req.request_type === "booking" ? "field service booking" : "hose quote request";
+  const custNote = fulfillmentNote(req);
+  const supNote = fulfillmentSupplierNote(req);
 
   await sendEmail(
     req.email,
@@ -114,7 +132,7 @@ async function onRequestCreated(req: any) {
     shell(
       `Thanks, ${req.name || "there"} — your request is in`,
       `Your reference is <b>${req.id}</b>. ${supplier ? `It's been sent to a supplier` : "We're matching you to a supplier"}.
-       You'll get an email as soon as there's a quote to review.`,
+       You'll get an email as soon as there's a quote to review.${custNote ? ` ${custNote}` : ""}`,
       { label: "Track this request", url: customerLink(req) },
     ),
   );
@@ -125,7 +143,7 @@ async function onRequestCreated(req: any) {
     shell(
       `New ${kind}`,
       `A customer (${req.name || "—"}) submitted <b>${req.id}</b> in ${req.location || "an unspecified area"}.
-       Open the supplier portal to price it up.`,
+       Open the supplier portal to price it up.${supNote ? ` ${supNote}` : ""}`,
       { label: "Open supplier portal", url: supplierLink() },
     ),
   );
@@ -203,12 +221,21 @@ async function onQuoteStatusChange(quote: any, oldStatus: string) {
       break;
     }
     case "completed": {
+      // Booking jobs and on-site-serviced hose quotes are handled entirely
+      // by the technician on site — nothing for the customer to collect or
+      // be shipped, so no fulfillment note applies there.
+      const selfInstall = !quote.is_booking && !quote.field_service?.requested;
+      const fulfillmentLine = selfInstall
+        ? (req.fulfillment === "delivery"
+            ? ` It's being sent to ${req.delivery_address || "your address"}.`
+            : ` It's ready to collect${supplier?.company_name ? ` from <b>${supplier.company_name}</b>` : ""}.`)
+        : "";
       await sendEmail(
         req.email,
         `Job complete — ${req.id}`,
         shell(
           "Your job is marked complete",
-          `${supplier?.company_name ? `<b>${supplier.company_name}</b> has` : "The supplier has"} marked <b>${req.id}</b> complete. Thanks for using HoseQuote.`,
+          `${supplier?.company_name ? `<b>${supplier.company_name}</b> has` : "The supplier has"} marked <b>${req.id}</b> complete.${fulfillmentLine} Thanks for using HoseQuote.`,
           { label: "View summary", url: customerLink(req) },
         ),
       );

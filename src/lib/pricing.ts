@@ -33,7 +33,7 @@ export function defaultPricing(scale = 1) {
       };
     });
   });
-  return { hose, fitting, labourBase: Math.round(15 * scale), crimpCharge: Math.round(8 * scale), travelBase: Math.round(45 * scale), calloutFee: Math.round(65 * scale), labourHourlyRate: Math.round(85 * scale) };
+  return { hose, fitting, labourBase: Math.round(15 * scale), crimpCharge: Math.round(8 * scale), travelBase: Math.round(45 * scale), calloutFee: Math.round(65 * scale), labourHourlyRate: Math.round(85 * scale), deliveryFee: Math.round(15 * scale) };
 }
 
 export function calcEstimate(form, pricing) {
@@ -65,9 +65,15 @@ export function calcEstimate(form, pricing) {
   const urgencyMult = URGENCY.find((u) => u.key === form.urgency)?.mult || 1;
   const travel = pricing.travelBase * urgencyMult;
   const callout = form.fieldServiceRequested ? (pricing.calloutFee ?? 65) : 0;
-  const total = hoseCost + fittingCost + labour + crimp + travel;
+  // Delivery is a flat, supplier-set fee with nothing for the supplier to
+  // confirm later (unlike the on-site callout above), so it's baked
+  // straight into the total rather than tracked as a separate pending item.
+  // Only relevant when the customer isn't already having a technician come
+  // to them — on-site jobs don't have a separate hose assembly to hand off.
+  const delivery = (!form.fieldServiceRequested && form.fulfillment === "delivery") ? (pricing.deliveryFee ?? 15) : 0;
+  const total = hoseCost + fittingCost + labour + crimp + travel + delivery;
   return {
-    hoseCost, fittingCost, labour, crimp, travel, callout, total, assemblyCount: validAssemblies, assemblyBreakdown,
+    hoseCost, fittingCost, labour, crimp, travel, callout, delivery, total, assemblyCount: validAssemblies, assemblyBreakdown,
     low: Math.round(total * 0.92), high: Math.round(total * 1.08),
   };
 }

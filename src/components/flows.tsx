@@ -25,6 +25,15 @@ export function CustomerFlow({ form, update, errors, step, next, back, submit, u
     }
   }, [form.fieldServiceRequested]);
 
+  // Same reveal-is-easy-to-miss issue as the on-site toggle above, for the
+  // delivery-address fields that appear when Delivery is picked.
+  const deliveryFieldsRef = useRef(null);
+  useEffect(() => {
+    if (!form.fieldServiceRequested && form.fulfillment === "delivery") {
+      deliveryFieldsRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [form.fieldServiceRequested, form.fulfillment]);
+
   const previewQuotes = suppliers
     .filter((s) => areasMatch(form.location, s.serviceArea))
     .map((s) => ({ supplierId: s.id, est: calcEstimate(form, pricingBySupplier[s.id]) }))
@@ -245,6 +254,36 @@ export function CustomerFlow({ form, update, errors, step, next, back, submit, u
                 </Field>
               </div>
             )}
+
+            {!form.fieldServiceRequested && (
+              <>
+                <Field label="Getting your hose assembly" required>
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { key: "pickup", label: "Pickup", desc: "Collect it from the supplier once it's ready" },
+                      { key: "delivery", label: "Delivery", desc: "Have it posted or couriered to you" },
+                    ].map((o) => (
+                      <button key={o.key} type="button" onClick={() => update("fulfillment", o.key)}
+                        className={`text-left py-2.5 px-3 rounded-lg border transition-colors ${form.fulfillment === o.key ? "border-orange-500 bg-orange-500/10" : "border-neutral-700"}`}>
+                        <div className={`font-semibold text-sm ${form.fulfillment === o.key ? "text-orange-500" : "text-white"}`}>{o.label}</div>
+                        <div className="text-xs text-neutral-500 mt-0.5">{o.desc}</div>
+                      </button>
+                    ))}
+                  </div>
+                </Field>
+
+                {form.fulfillment === "delivery" && (
+                  <div ref={deliveryFieldsRef}>
+                    <Field label="Delivery Address" required error={errors.deliveryAddress}>
+                      <input placeholder="Full delivery address" className={inputClass(errors.deliveryAddress)} value={form.deliveryAddress} onChange={(e) => update("deliveryAddress", e.target.value)} />
+                    </Field>
+                    <Field label="Delivery Notes (optional)" hint="Anything the courier should know — access, preferred time, etc.">
+                      <textarea rows={2} className={inputClass()} value={form.deliveryNotes} onChange={(e) => update("deliveryNotes", e.target.value)} />
+                    </Field>
+                  </div>
+                )}
+              </>
+            )}
           </>
         )}
 
@@ -309,6 +348,17 @@ export function CustomerFlow({ form, update, errors, step, next, back, submit, u
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-neutral-400">On-site callout</span>
                         <span className="text-white font-semibold">${pq.est.callout}</span>
+                      </div>
+                      <div className={`flex items-center justify-between pt-1.5 border-t ${selected ? "border-orange-500/30" : "border-neutral-700"}`}>
+                        <span className={`text-sm font-bold ${selected ? "text-orange-500" : "text-white"}`}>Total</span>
+                        <span className={`text-lg font-extrabold ${selected ? "text-orange-500" : "text-white"}`}>${displayLow} – ${displayHigh}</span>
+                      </div>
+                    </div>
+                  ) : pq.est.delivery ? (
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-neutral-400">Includes delivery</span>
+                        <span className="text-white font-semibold">${pq.est.delivery}</span>
                       </div>
                       <div className={`flex items-center justify-between pt-1.5 border-t ${selected ? "border-orange-500/30" : "border-neutral-700"}`}>
                         <span className={`text-sm font-bold ${selected ? "text-orange-500" : "text-white"}`}>Total</span>
