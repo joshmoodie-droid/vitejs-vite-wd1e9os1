@@ -23,6 +23,7 @@ export function JobQuoteCard({ q, req, unlocked, pricing, onUpdateFieldService, 
       <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
         <span className="text-orange-500 font-mono text-sm">{q.requestId}</span>
         <div className="flex items-center gap-2">
+          {!q.isBooking && q.fieldService?.requested && <Badge tone="orange">On-site</Badge>}
           <Badge tone={q.quoteType === "auto" ? "neutral" : "amber"}>{q.quoteType}</Badge>
           <Badge tone={isCompleted ? "green" : isAccepted ? "orange" : "neutral"}>{q.status}</Badge>
         </div>
@@ -125,7 +126,10 @@ export function RequestCard({ r, myQuote, pricing, onSubmitManualQuote, onConfir
     <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-4">
       <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
         <span className="text-orange-500 font-mono text-sm">{r.id}</span>
-        <Badge tone={r.urgency === "emergency" ? "red" : r.urgency === "priority" ? "amber" : "neutral"}>{URGENCY.find((u) => u.key === r.urgency)?.label}</Badge>
+        <div className="flex items-center gap-2">
+          {r.requestType !== "booking" && r.fieldServiceRequested && <Badge tone="orange">On-site</Badge>}
+          <Badge tone={r.urgency === "emergency" ? "red" : r.urgency === "priority" ? "amber" : "neutral"}>{URGENCY.find((u) => u.key === r.urgency)?.label}</Badge>
+        </div>
       </div>
       <div className="text-white font-semibold mb-2">
         {r.requestType === "booking" ? `${r.equipmentType} — ${r.issue}` : (r.assemblies?.length > 1 ? `${r.assemblies.length} hose assemblies` : r.assemblies?.[0]?.hoseType)}
