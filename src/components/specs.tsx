@@ -37,7 +37,7 @@ export function AssemblyPriceBreakdown({ r, pricing }) {
         ))}
       </div>
       <div className="flex items-center justify-between pt-2 mt-2 border-t border-neutral-700">
-        <span className="text-neutral-400 text-xs">+ Labour ${Math.round(est.labour)}, Crimp ${Math.round(est.crimp)}, Travel ${Math.round(est.travel)}{est.callout ? `, Callout $${Math.round(est.callout)}` : ""}</span>
+        <span className="text-neutral-400 text-xs">+ Labour ${Math.round(est.labour)}, Crimp ${Math.round(est.crimp)}, Travel ${Math.round(est.travel)}{est.callout ? `, Callout $${Math.round(est.callout)}` : ""}{est.delivery ? `, Delivery $${Math.round(est.delivery)}` : ""}</span>
       </div>
       <div className="flex items-center justify-between pt-1">
         <span className="font-bold text-orange-500">Total</span>
@@ -76,6 +76,14 @@ export function ManufacturingSpec({ r, compact }: any) {
       {r.fieldServiceRequested && (
         <div className="text-orange-400 pt-1 border-t border-neutral-800 mt-1">
           <span className="text-neutral-500">On-site service requested:</span> {r.siteAddress}{r.accessNotes ? ` — ${r.accessNotes}` : ""}
+        </div>
+      )}
+      {!r.fieldServiceRequested && (
+        <div className="text-orange-400 pt-1 border-t border-neutral-800 mt-1">
+          <span className="text-neutral-500">Fulfillment:</span>{" "}
+          {r.fulfillment === "delivery"
+            ? `Deliver to ${r.deliveryAddress}${r.deliveryNotes ? ` — ${r.deliveryNotes}` : ""}`
+            : "Customer will pick up"}
         </div>
       )}
     </div>

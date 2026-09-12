@@ -4,7 +4,7 @@ export function supplierFromRow(r) {
   return { id: r.id, companyName: r.company_name, serviceArea: r.service_area || "", contactEmail: r.contact_email, contactPhone: r.contact_phone, createdAt: r.created_at };
 }
 export function pricingFromRow(r) {
-  return { hose: r.hose || {}, fitting: r.fitting || {}, labourBase: r.labour_base, crimpCharge: r.crimp_charge, travelBase: r.travel_base, calloutFee: r.callout_fee, labourHourlyRate: r.labour_hourly_rate };
+  return { hose: r.hose || {}, fitting: r.fitting || {}, labourBase: r.labour_base, crimpCharge: r.crimp_charge, travelBase: r.travel_base, calloutFee: r.callout_fee, labourHourlyRate: r.labour_hourly_rate, deliveryFee: r.delivery_fee };
 }
 export function requestFromRow(r) {
   return {
@@ -12,6 +12,7 @@ export function requestFromRow(r) {
     accessToken: r.access_token,
     urgency: r.urgency, location: r.location, fieldServiceRequested: r.field_service_requested,
     siteAddress: r.site_address, accessNotes: r.access_notes, fsLabourHoursEstimate: r.fs_labour_hours_estimate,
+    fulfillment: r.fulfillment, deliveryAddress: r.delivery_address, deliveryNotes: r.delivery_notes,
     name: r.name, phone: r.phone, email: r.email, preferredTime: r.preferred_time, notes: r.notes, photoUrl: r.photo_url,
     assemblies: r.assemblies || [], equipmentType: r.equipment_type, issue: r.issue, description: r.description,
     labourHoursEstimate: r.labour_hours_estimate, createdAt: r.created_at,

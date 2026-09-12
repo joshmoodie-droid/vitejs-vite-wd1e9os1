@@ -13,6 +13,7 @@ export function emptyForm() {
     assemblies: [emptyAssembly()],
     urgency: "standard", location: "", selectedSupplierId: "",
     fieldServiceRequested: false, siteAddress: "", accessNotes: "", fsLabourHoursEstimate: "",
+    fulfillment: "pickup", deliveryAddress: "", deliveryNotes: "",
     name: "", phone: "", email: "", preferredTime: "", notes: "", photoUrl: "",
   };
 }
