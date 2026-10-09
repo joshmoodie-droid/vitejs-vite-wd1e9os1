@@ -2,7 +2,7 @@
 // every audited hose grouped by machine, overall findings, and completion.
 
 import { Fragment, useEffect, useState } from "react";
-import { ArrowLeft, Pencil, Trash2, Plus, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Pencil, Trash2, Plus, CheckCircle2, ExternalLink, Send, Link2 } from "lucide-react";
 import { Badge, Field, inputClass } from "../ui";
 import { PhotoStrip } from "../photos/PhotoStrip";
 import { AuditItemForm } from "./AuditItemForm";
@@ -11,8 +11,14 @@ import { describeHoseSpec } from "../../lib/machines";
 import {
   AUDIT_STATUSES, auditStatusInfo, auditActionLabel, auditTotal, money,
   listAuditItems, createAuditItem, updateAuditItem, deleteAuditItem, updateAudit, emptyAuditItem,
+  sendAuditReport, auditReportPath,
   type Audit, type AuditDraft, type AuditItem,
 } from "../../lib/audits";
+
+const DRAFT_KEYS: (keyof AuditDraft)[] = [
+  "customerName", "customerEmail", "customerPhone", "location", "siteAddress", "scheduledFor",
+  "auditFee", "perMachineFee", "summary", "status",
+];
 
 export function AuditEditor({
   audit, userId, onBack, onUpdated,
@@ -28,6 +34,8 @@ export function AuditEditor({
   const [draft, setDraft] = useState<AuditDraft>(audit);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [sending, setSending] = useState(false);
+  const [reportNote, setReportNote] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -41,19 +49,52 @@ export function AuditEditor({
   const total = auditTotal({ ...draft, machinesCount: audit.machinesCount }, items ?? undefined);
   const machineCount = labels.length || Number(audit.machinesCount || 0);
   const replaceCount = (items ?? []).filter((i) => i.action === "replace_now" || i.action === "replace_next_service").length;
-  const dirty = (Object.keys(draft) as (keyof AuditDraft)[]).some((k) => draft[k] !== audit[k]);
+  const dirty = DRAFT_KEYS.some((k) => draft[k] !== audit[k]);
 
-  const save = async (next: AuditDraft) => {
+  const save = async (next: AuditDraft): Promise<Audit | null> => {
     setSaving(true);
     setError("");
     try {
       const saved = await updateAudit(audit.id, next);
       onUpdated(saved);
       setDraft(saved);
+      return saved;
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't save — please try again.");
+      return null;
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Email the customer their report link (via the audit-report Edge Function).
+  const sendReport = async (a: Audit) => {
+    setSending(true);
+    setReportNote("");
+    try {
+      const { to } = await sendAuditReport(a.id);
+      onUpdated({ ...a, reportSentAt: new Date().toISOString() });
+      setReportNote(`Report emailed to ${to}.`);
+    } catch (e) {
+      setReportNote(`Report not sent: ${e instanceof Error ? e.message : "please try again"}`);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  // Completing an audit sends the customer their report straight away.
+  const complete = async () => {
+    const saved = await save({ ...draft, status: "completed" });
+    if (saved && saved.customerEmail) await sendReport(saved);
+  };
+
+  const reportUrl = `${window.location.origin}${auditReportPath(audit)}`;
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(reportUrl);
+      setReportNote("Report link copied.");
+    } catch {
+      setReportNote(reportUrl);
     }
   };
 
@@ -121,15 +162,42 @@ export function AuditEditor({
           </button>
           {audit.status !== "completed" && (
             <button
-              onClick={() => save({ ...draft, status: "completed" })} disabled={saving || !items || items.length === 0}
+              onClick={complete} disabled={saving || sending || !items || items.length === 0}
               title={items?.length === 0 ? "Add the hoses you audited first" : undefined}
               className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 text-black font-bold px-4 py-2 rounded-lg"
             >
-              <CheckCircle2 className="w-4 h-4" /> Mark audit complete
+              <CheckCircle2 className="w-4 h-4" /> Mark audit complete{audit.customerEmail ? " & email report" : ""}
             </button>
           )}
         </div>
       </div>
+
+      {audit.status === "completed" && (
+        <div className="bg-neutral-900 border border-emerald-500/30 rounded-xl p-5 mb-6">
+          <div className="text-white font-bold mb-1">Customer report</div>
+          <p className="text-sm text-neutral-400 mb-3">
+            {audit.reportSentAt
+              ? `Emailed to ${audit.customerEmail} on ${new Date(audit.reportSentAt).toLocaleDateString("en-AU")}.`
+              : audit.customerEmail
+                ? "Not emailed yet."
+                : "No customer email on this audit — copy the link and send it yourself."}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <a href={auditReportPath(audit)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 bg-neutral-800 hover:bg-neutral-700 text-white font-semibold text-sm px-3 py-2 rounded-lg">
+              <ExternalLink className="w-3.5 h-3.5" /> View report
+            </a>
+            {audit.customerEmail && (
+              <button onClick={() => sendReport(audit)} disabled={sending} className="flex items-center gap-1.5 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-black font-bold text-sm px-3 py-2 rounded-lg">
+                <Send className="w-3.5 h-3.5" /> {sending ? "Sending…" : audit.reportSentAt ? "Email again" : "Email report"}
+              </button>
+            )}
+            <button onClick={copyLink} className="flex items-center gap-1.5 border border-neutral-700 hover:border-neutral-500 text-neutral-300 font-semibold text-sm px-3 py-2 rounded-lg">
+              <Link2 className="w-3.5 h-3.5" /> Copy link
+            </button>
+          </div>
+          {reportNote && <p className="text-sm text-neutral-300 mt-3 break-all">{reportNote}</p>}
+        </div>
+      )}
 
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-white font-bold text-lg">

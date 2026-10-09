@@ -45,6 +45,8 @@ export type Audit = {
   summary: string;
   completedAt: string;
   createdAt: string;
+  accessToken: string; // key for the customer's report link
+  reportSentAt: string;
 };
 
 export type AuditItem = {
@@ -79,6 +81,7 @@ function auditFromRow(r: Row): Audit {
     machinesCount: str(r.machines_count), preferredTime: str(r.preferred_time), notes: str(r.notes),
     scheduledFor: str(r.scheduled_for), auditFee: str(r.audit_fee), perMachineFee: str(r.per_machine_fee),
     summary: str(r.summary), completedAt: str(r.completed_at), createdAt: str(r.created_at),
+    accessToken: str(r.access_token), reportSentAt: str(r.report_sent_at),
   };
 }
 
@@ -194,3 +197,48 @@ export function auditTotal(a: Pick<Audit, "auditFee" | "perMachineFee" | "machin
 }
 
 export const money = (n: number) => `A$${n.toFixed(2).replace(/\.00$/, "")}`;
+
+// ---------- report (Edge Function: supabase/functions/audit-report) ----------
+
+// The customer's report link — works without signing in.
+export const auditReportPath = (a: Pick<Audit, "id" | "accessToken">) => `/a/${a.id}?t=${a.accessToken}`;
+
+export type AuditReport = {
+  audit: {
+    id: string; status: AuditStatus; customerName: string; siteAddress: string | null; location: string | null;
+    scheduledFor: string | null; completedAt: string | null; summary: string | null;
+    auditFee: number; perMachineFee: number; total: number;
+  };
+  supplier: { name: string; email: string | null; phone: string | null } | null;
+  items: {
+    id: string; machineLabel: string; position: string; condition: Condition; action: AuditAction;
+    recommendation: string | null; spec: Partial<HoseSpec>; photos: string[]; // signed URLs
+  }[];
+};
+
+// supabase.functions.invoke reports non-2xx as an error whose body holds our
+// { error } message — surface that rather than a generic status line.
+async function invokeAuditReport<T>(body: Record<string, unknown>): Promise<T> {
+  const { data, error } = await supabase.functions.invoke("audit-report", { body });
+  if (error) {
+    let message = error.message;
+    try {
+      const ctx = (error as { context?: Response }).context;
+      const parsed = ctx ? await ctx.json() : null;
+      if (parsed?.error) message = parsed.error;
+    } catch {
+      /* keep the generic message */
+    }
+    throw new Error(message);
+  }
+  return data as T;
+}
+
+export function fetchAuditReport(id: string, token: string): Promise<AuditReport> {
+  return invokeAuditReport<AuditReport>({ action: "view", id, token });
+}
+
+// Email the customer their report link (audit's supplier or an admin only).
+export function sendAuditReport(id: string): Promise<{ sent: boolean; to: string }> {
+  return invokeAuditReport({ action: "send", id });
+}

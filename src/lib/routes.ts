@@ -5,6 +5,8 @@
 export type Route =
   // Email link to a request's read-only status page: /r/:requestId?t=:token
   | { name: "request"; requestId: string; token: string | null }
+  // Hose audit report from the customer's email: /a/:auditId?t=:token
+  | { name: "audit"; auditId: string; token: string | null }
   // Supplier email links open the app on the supplier side: /supplier
   | { name: "supplier" }
   // Customer email links straight to their maintenance register / requests
@@ -21,6 +23,10 @@ export function matchRoute(pathname: string, search = ""): Route {
       requestId: decodeURIComponent(request[1]),
       token: new URLSearchParams(search).get("t"),
     };
+  }
+  const audit = pathname.match(/^\/a\/([^/]+)\/?$/);
+  if (audit) {
+    return { name: "audit", auditId: decodeURIComponent(audit[1]), token: new URLSearchParams(search).get("t") };
   }
   if (/^\/supplier\/?$/.test(pathname)) return { name: "supplier" };
   if (/^\/machines\/?$/.test(pathname)) return { name: "machines" };
