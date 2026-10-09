@@ -10,6 +10,7 @@ import { HOSE_TYPES, BORES, FITTING_TYPES, ORIENTATIONS, URGENCY, EQUIPMENT_TYPE
 import { defaultPricing, calcEstimate, combinedTotal, calcBookingEstimate } from "./lib/pricing";
 import { emptyAssembly, emptyForm, emptyBookingForm } from "./lib/forms";
 import { supplierFromRow, pricingFromRow, requestFromRow, quoteFromRow, connectionFromRow } from "./lib/rows";
+import { loadCommissions } from "./lib/commission";
 import { areasMatch, slugify } from "./lib/util";
 import { currentRoute } from "./lib/routes";
 import { Field, inputClass, StepDot, SectionTitle, Badge } from "./components/ui";
@@ -48,6 +49,8 @@ export default function HoseQuoteApp() {
   const [requests, setRequests] = useState([]);
   const [quotes, setQuotes] = useState([]);
   const [connections, setConnections] = useState([]);
+  const [commissions, setCommissions] = useState([]); // HoseQuote fees (admin / supplier)
+  const [commissionRates, setCommissionRates] = useState({});
   const [session, setSession] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
 
@@ -96,11 +99,16 @@ export default function HoseQuoteApp() {
       const { data: connRows } = await supabase.from("connections").select("*");
       const conns = (connRows || []).map(connectionFromRow);
 
+      // HoseQuote fees: only an admin / the supplier get rows back (RLS).
+      const comm = await loadCommissions().catch(() => ({ commissions: [], rates: {} }));
+
       setSuppliers(sup);
       setPricingBySupplier(pbs);
       setRequests(req);
       setQuotes(qts);
       setConnections(conns);
+      setCommissions(comm.commissions);
+      setCommissionRates(comm.rates);
     } catch (e) {
       console.error("Failed to load data", e);
     }
@@ -341,6 +349,7 @@ export default function HoseQuoteApp() {
     const { error } = await supabase.from("quotes").update(row).eq("id", quoteId);
     if (error) { console.error("Edit quote failed", error); return; }
     setQuotes((qs) => qs.map((q) => (q.id === quoteId ? { ...q, ...overrides } : q)));
+    loadAll({ quiet: true }); // the job's HoseQuote fee follows the new price
   };
 
   const rejectQuote = async (quoteId) => {
@@ -414,6 +423,7 @@ export default function HoseQuoteApp() {
     const now = new Date().toISOString();
     await supabase.from("quotes").update({ status: "completed", completed_at: now }).eq("id", quoteId);
     setQuotes((qs) => qs.map((q) => (q.id === quoteId ? { ...q, status: "completed", completedAt: now } : q)));
+    loadAll({ quiet: true }); // picks up the job's HoseQuote fee (set server-side)
   };
 
   const savePricingFor = async (supplierId, next) => {
@@ -646,6 +656,8 @@ export default function HoseQuoteApp() {
             requests={requests}
             quotes={quotes}
             connections={connections}
+            commissions={commissions}
+            commissionRates={commissionRates}
             onSavePricing={savePricingFor}
             onSubmitManualQuote={submitManualQuote}
             onUnlock={unlockContact}
@@ -668,6 +680,8 @@ export default function HoseQuoteApp() {
             requests={requests}
             quotes={quotes}
             connections={connections}
+            commissions={commissions}
+            commissionRates={commissionRates}
             pricing={pricingBySupplier[session]}
             onSavePricing={(next) => savePricingFor(session, next)}
             onSubmitManualQuote={(requestId, priceLow, priceHigh, leadTimeDays) => submitManualQuote(requestId, session, priceLow, priceHigh, leadTimeDays)}

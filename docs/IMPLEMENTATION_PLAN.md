@@ -184,13 +184,20 @@ they have one.
 
 Independent of M1–M5. Implements ROADMAP §3 "Option A".
 
-- **Schema — `0017_commission.sql`**: `suppliers.commission_rate numeric default
-  0.08`, `quotes.commission_amount numeric`, `quotes.accepted_at timestamptz`.
-  Trigger computes `commission_amount = clamp(total × rate, 5, 50)` when status
-  → `accepted`.
-- **Admin portal**: "Commission" tab — per supplier per month: jobs, job value,
-  commission due; CSV export for invoicing (Stripe invoices sent manually at first).
-- Supplier portal: show "HoseQuote fee" on accepted jobs (transparency).
+- **Schema — `0021_commission.sql`** (built): separate tables readable only by
+  an admin and the supplier concerned (supplier and quote rows are visible to
+  customers): `supplier_commission (supplier_id, rate default 0.08, min_fee 5,
+  max_fee 50)` and `commissions` — one row per job, kept in step with the quote
+  by trigger. Fee = clamp(job value × rate, min, max), never more than the job;
+  job value = quoted price (range midpoint) + priced on-site costs; the rate is
+  fixed when the job is accepted; frozen once invoiced. Jobs accepted before
+  0021 are recorded at rate 0 (free).
+- **Admin portal**: "Commission" tab — per month (by completion date) and
+  supplier: jobs, job value, commission, invoiced or not; CSV export; mark a
+  supplier's month invoiced; waive / charge a single job; supplier rates.
+  Invoices themselves are still sent by hand (e.g. from Xero).
+- Supplier portal: fee terms under the company name, "HoseQuote fee $X" on
+  each accepted / completed job.
 - Later: lower rate on repeat jobs (needs M2's machine/customer history),
   Stripe invoicing automation, Pro subscription tier.
 
