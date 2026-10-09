@@ -54,15 +54,13 @@ export function FlowChooser({ onChoose, customer, onSignIn, onMine, onMachines }
         <button
           type="button"
           onClick={onMachines}
-          className="w-full text-left bg-neutral-900/50 border border-neutral-800 hover:border-orange-500 rounded-xl p-5 transition-colors group flex items-center gap-4"
+          className="w-full text-left bg-neutral-900 border border-neutral-800 hover:border-orange-500 rounded-xl p-6 transition-colors group"
         >
-          <div className="w-10 h-10 rounded-lg bg-orange-500/10 border border-orange-500/40 flex items-center justify-center shrink-0">
-            <Tractor className="w-5 h-5 text-orange-500" />
+          <div className="w-12 h-12 rounded-lg bg-orange-500/10 border border-orange-500/40 flex items-center justify-center mb-4">
+            <Tractor className="w-6 h-6 text-orange-500" />
           </div>
-          <div>
-            <div className="text-white font-bold mb-0.5 group-hover:text-orange-500 transition-colors">My Machines — Maintenance Register</div>
-            <p className="text-neutral-500 text-sm">Free: record each machine's hoses and service history in one place.{customer ? "" : " Sign in to start."}</p>
-          </div>
+          <div className="text-white font-bold text-lg mb-1 group-hover:text-orange-500 transition-colors">My Machines</div>
+          <p className="text-neutral-500 text-sm">A free maintenance register: record each machine's hoses, checks and service history in one place.{customer ? "" : " Sign in to start."}</p>
         </button>
       </div>
 

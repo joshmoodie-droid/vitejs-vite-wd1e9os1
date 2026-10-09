@@ -46,7 +46,7 @@ test("maintenance register asks a signed-out visitor to sign in", async ({
 }) => {
   await page.goto("/");
   await page
-    .getByRole("button", { name: /My Machines — Maintenance Register/ })
+    .getByRole("button", { name: /My Machines.*maintenance register/i })
     .click();
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
   await expect(page.getByPlaceholder("you@example.com")).toBeVisible();
