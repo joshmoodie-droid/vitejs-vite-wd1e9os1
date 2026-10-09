@@ -86,6 +86,12 @@ export function PricingAdmin({ pricing, onSave }: any) {
           <Field label="Labour Hourly Rate ($ / hour, field service)">
             <input type="number" className={inputClass()} value={local.labourHourlyRate ?? 85} onChange={(e) => setLocal((p) => ({ ...p, labourHourlyRate: parseFloat(e.target.value) || 0 }))} />
           </Field>
+          <Field label="Hose Audit Fee ($ flat)">
+            <input type="number" className={inputClass()} value={local.auditFee ?? 150} onChange={(e) => setLocal((p) => ({ ...p, auditFee: parseFloat(e.target.value) || 0 }))} />
+          </Field>
+          <Field label="Hose Audit Fee ($ per machine)">
+            <input type="number" className={inputClass()} value={local.auditFeePerMachine ?? 0} onChange={(e) => setLocal((p) => ({ ...p, auditFeePerMachine: parseFloat(e.target.value) || 0 }))} />
+          </Field>
         </div>
       </div>
 

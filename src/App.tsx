@@ -22,6 +22,7 @@ import { AdminSuppliers } from "./components/AdminSuppliers";
 import { ActiveQuoteEditor, SupplierFieldServiceReview, AutoQuoteReview } from "./components/quoteEditors";
 import { MyRequests } from "./components/MyRequests";
 import { MyMachines } from "./components/machines/MyMachines";
+import { AuditBooking } from "./components/audits/AuditBooking";
 import { JobQuoteCard, RequestCard } from "./components/portalCards";
 import { FieldServiceSection } from "./components/FieldServiceSection";
 import { SupplierPortal, AdminPortal } from "./components/portals";
@@ -200,7 +201,7 @@ export default function HoseQuoteApp() {
   };
 
   function pricingToRow(p) {
-    return { hose: p.hose, fitting: p.fitting, labour_base: p.labourBase, crimp_charge: p.crimpCharge, travel_base: p.travelBase, callout_fee: p.calloutFee, labour_hourly_rate: p.labourHourlyRate, delivery_fee: p.deliveryFee };
+    return { hose: p.hose, fitting: p.fitting, labour_base: p.labourBase, crimp_charge: p.crimpCharge, travel_base: p.travelBase, callout_fee: p.calloutFee, labour_hourly_rate: p.labourHourlyRate, delivery_fee: p.deliveryFee, audit_fee: p.auditFee ?? 150, audit_fee_per_machine: p.auditFeePerMachine ?? 0 };
   }
 
   const update = (key, value) => setForm((f) => ({ ...f, [key]: value }));
@@ -581,6 +582,15 @@ export default function HoseQuoteApp() {
             customer={customer}
           />
         )}
+        {view === "customer" && flowType === "audit" && (
+          <AuditBooking
+            customer={customer} profile={profile}
+            suppliers={suppliers} pricingBySupplier={pricingBySupplier}
+            onBack={() => setFlowType(null)}
+            onSignIn={() => { setFlowType(null); setCustomerView("auth"); }}
+            onDone={() => { setFlowType(null); setCustomerView("mine"); }}
+          />
+        )}
         {view === "customer" && flowType === "booking" && (
           <BookingFlow
             customer={customer}
@@ -651,6 +661,7 @@ export default function HoseQuoteApp() {
         {view === "supplier" && customer && supplierResolved && !isAdmin && session && currentSupplier && (
           <SupplierPortal
             supplier={currentSupplier}
+            authUserId={customer?.id}
             onLogout={signOut}
             requests={requests}
             quotes={quotes}

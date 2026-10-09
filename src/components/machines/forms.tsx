@@ -109,7 +109,7 @@ export function MachineForm({
 
 // ---------- hose ----------
 
-function HoseSpecFields({ spec, onChange }: { spec: HoseSpec; onChange: (s: HoseSpec) => void }) {
+export function HoseSpecFields({ spec, onChange }: { spec: HoseSpec; onChange: (s: HoseSpec) => void }) {
   const set = (patch: Partial<HoseSpec>) => onChange({ ...spec, ...patch });
   const fittingFits = (type: string) => !spec.bore || fittingBoresFor(type).some((b) => b.key === spec.bore);
   const setBore = (bore: string) => {

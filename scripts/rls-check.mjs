@@ -7,6 +7,7 @@
 // Contract (see supabase/migrations/0006_phase3c_rls_lockdown.sql):
 //   - requests / quotes / connections  -> invisible to anon (SELECT returns [])
 //   - machines / machine_hoses / service_log / hose_checks -> no anon access (0012, 0015)
+//   - audits / audit_items -> no anon access; anon can't call book_audit (0016)
 //   - suppliers / supplier_pricing     -> still world-readable (customer picker)
 //   - every table                      -> anon cannot INSERT / UPDATE
 //   - the sanctioned anon path (SECURITY DEFINER RPCs) still callable
@@ -88,7 +89,7 @@ for (const table of ["requests", "quotes", "connections"]) {
 // anon has no grants on these at all, so PostgREST answers 401/403
 // (permission denied) rather than 200 []. Either means no rows leaked. These
 // tables may be empty, so the INSERT probes in section 3 are the real guard.
-for (const table of ["machines", "machine_hoses", "service_log", "hose_checks"]) {
+for (const table of ["machines", "machine_hoses", "service_log", "hose_checks", "audits", "audit_items"]) {
   const res = await api(`/${table}?select=id&limit=5`);
   let body = null;
   try {
@@ -156,6 +157,8 @@ const inserts = [
   ["machine_hoses", { machine_id: "00000000-0000-0000-0000-000000000000", position: marker }],
   ["service_log", { machine_id: "00000000-0000-0000-0000-000000000000" }],
   ["hose_checks", { machine_id: "00000000-0000-0000-0000-000000000000", condition: "ok" }],
+  ["audits", { supplier_id: realSupplier?.id ?? NONE, source: "supplier", customer_name: `${marker} (delete me)` }],
+  ["audit_items", { audit_id: "00000000-0000-0000-0000-000000000000", machine_label: marker, position: marker, condition: "ok" }],
 ];
 for (const [table, row] of inserts) {
   const res = await api(`/${table}`, {
@@ -288,6 +291,20 @@ if (realSupplier) {
     !pub.ok,
     `public URL answered ${pub.status} — the bucket must stay private`,
   );
+}
+
+// --- 8. hose audits can't be booked anonymously (0016) ----------------------
+{
+  const res = await api(`/rpc/book_audit`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      p_supplier_id: realSupplier?.id ?? "00000000-0000-0000-0000-000000000000",
+      p_location: marker, p_site_address: marker, p_machines_count: 1,
+      p_preferred_time: "", p_phone: "", p_notes: marker,
+    }),
+  });
+  check("anon cannot book a hose audit", !res.ok, `book_audit answered ${res.status} for anon`);
 }
 
 // --- verdict --------------------------------------------------------------

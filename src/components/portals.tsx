@@ -3,12 +3,13 @@
 // RequestCard / JobQuoteCard lists; AdminPortal also hosts AdminSuppliers.
 
 import { useState } from "react";
-import { LogOut, Wrench, Settings, Building2 } from "lucide-react";
+import { LogOut, Wrench, Settings, Building2, ClipboardCheck } from "lucide-react";
 import { RequestCard, JobQuoteCard } from "./portalCards";
 import { PricingAdmin } from "./PricingAdmin";
 import { AdminSuppliers } from "./AdminSuppliers";
+import { SupplierAudits } from "./audits/SupplierAudits";
 
-export function SupplierPortal({ supplier, onLogout, requests, quotes, connections, pricing, onSavePricing, onSubmitManualQuote, onUnlock, onConfirmQuote, onRejectQuote, onUpdateFieldService, onMarkComplete }: any) {
+export function SupplierPortal({ supplier, authUserId, onLogout, requests, quotes, connections, pricing, onSavePricing, onSubmitManualQuote, onUnlock, onConfirmQuote, onRejectQuote, onUpdateFieldService, onMarkComplete }: any) {
   const [tab, setTab] = useState("jobs");
   const [jobType, setJobType] = useState("quotes"); // "quotes" = hose assembly, "field" = field service jobs
   const [stage, setStage] = useState("new");
@@ -52,6 +53,7 @@ export function SupplierPortal({ supplier, onLogout, requests, quotes, connectio
       <div className="flex gap-1 bg-neutral-900 rounded-lg p-1 mb-6">
         {[
           { key: "jobs", label: "Jobs", icon: Wrench },
+          { key: "audits", label: "Audits", icon: ClipboardCheck },
           { key: "pricing", label: "Pricing", icon: Settings },
         ].map((t) => (
           <button key={t.key} onClick={() => setTab(t.key)} className={`flex-1 py-2 rounded-md font-semibold text-sm transition-colors flex items-center justify-center gap-1.5 ${tab === t.key ? "bg-orange-500 text-black" : "text-neutral-400"}`}>
@@ -139,6 +141,8 @@ export function SupplierPortal({ supplier, onLogout, requests, quotes, connectio
           )}
         </div>
       )}
+
+      {tab === "audits" && <SupplierAudits supplierId={supplier.id} userId={authUserId} pricing={pricing} />}
 
       {tab === "pricing" && <PricingAdmin pricing={pricing} onSave={onSavePricing} />}
     </div>

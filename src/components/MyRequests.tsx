@@ -8,6 +8,7 @@ import { Plus, RotateCcw, Tractor } from "lucide-react";
 import { supabase } from "../supabaseClient";
 import { Badge } from "./ui";
 import { SaveToMachine } from "./machines/SaveToMachine";
+import { CustomerAudits } from "./audits/CustomerAudits";
 import { assembliesFromRequest, listSavedRequestIds, type QuotePrefill } from "../lib/machines";
 
 const MY_REQ_STATUS = {
@@ -60,6 +61,8 @@ export function MyRequests({ customerId, email, onNew, onOrderAgain, onMachines 
           <Plus className="w-4 h-4" /> New request
         </button>
       </div>
+
+      <CustomerAudits customerId={customerId} />
 
       {rows === null && <p className="text-neutral-500">Loading…</p>}
 

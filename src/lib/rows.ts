@@ -4,7 +4,7 @@ export function supplierFromRow(r) {
   return { id: r.id, companyName: r.company_name, serviceArea: r.service_area || "", contactEmail: r.contact_email, contactPhone: r.contact_phone, createdAt: r.created_at };
 }
 export function pricingFromRow(r) {
-  return { hose: r.hose || {}, fitting: r.fitting || {}, labourBase: r.labour_base, crimpCharge: r.crimp_charge, travelBase: r.travel_base, calloutFee: r.callout_fee, labourHourlyRate: r.labour_hourly_rate, deliveryFee: r.delivery_fee };
+  return { hose: r.hose || {}, fitting: r.fitting || {}, labourBase: r.labour_base, crimpCharge: r.crimp_charge, travelBase: r.travel_base, calloutFee: r.callout_fee, labourHourlyRate: r.labour_hourly_rate, deliveryFee: r.delivery_fee, auditFee: r.audit_fee, auditFeePerMachine: r.audit_fee_per_machine };
 }
 export function requestFromRow(r) {
   return {
