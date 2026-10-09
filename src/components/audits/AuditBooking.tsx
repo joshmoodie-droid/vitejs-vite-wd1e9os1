@@ -79,8 +79,8 @@ export function AuditBooking({
         </div>
         <h1 className="text-3xl md:text-4xl font-extrabold text-white mb-2">Book a Hose Audit</h1>
         <p className="text-neutral-400 max-w-lg mx-auto">
-          A supplier inspects every hose on your machines, photographs them, and tells you what needs
-          replacing now, what can wait, and what's fine — before anything bursts.
+          A supplier checks the hoses on your machines, photographs any of concern, and recommends which
+          ones to replace now, which can wait, and which are fine — so you can plan ahead before anything bursts.
         </p>
       </div>
     </>
