@@ -28,6 +28,7 @@ import { JobQuoteCard, RequestCard } from "./components/portalCards";
 import { FieldServiceSection } from "./components/FieldServiceSection";
 import { SupplierPortal, AdminPortal } from "./components/portals";
 import { CustomerFlow, BookingFlow } from "./components/flows";
+import { MobileNav, AccountPanel } from "./components/MobileNav";
 
 // Admin & supplier access is by Supabase Auth now (Phase 3a): admin = email in
 // public.app_admin_emails; supplier = suppliers.auth_user_id linked to the
@@ -57,7 +58,7 @@ export default function HoseQuoteApp() {
   // ---- customer accounts (Phase 2) ----
   const [customer, setCustomer] = useState(null); // Supabase auth user
   const [profile, setProfile] = useState(null);
-  const [customerView, setCustomerView] = useState(initialCustomerView); // "new" | "auth" | "mine" | "machines"
+  const [customerView, setCustomerView] = useState(initialCustomerView); // "new" | "auth" | "mine" | "machines" | "account"
 
   const [step, setStep] = useState(1);
   const [form, setForm] = useState(emptyForm());
@@ -202,6 +203,29 @@ export default function HoseQuoteApp() {
     setForm(fill);
     setBookingForm(fill);
   }, [profile]);
+
+  // Phone tab bar (components/MobileNav). Leaving a half-filled wizard is
+  // the same as using the header links on a larger screen.
+  // Suppliers and admins get a Supplier tab; anyone else reaches the portal
+  // (sign-in) from Account, so the bar doesn't change shape under them.
+  const supplierTab = isAdmin || !!session;
+  const mobileTab =
+    view === "supplier" ? (supplierTab ? "supplier" : "account")
+      : flowType !== null ? "home"
+      : customerView === "machines" ? "machines"
+      : customerView === "mine" ? "requests"
+      : customerView === "account" || customerView === "auth" ? "account"
+      : "home";
+  const goTab = (tab) => {
+    if (tab === "supplier") {
+      setView("supplier");
+    } else {
+      setView("customer");
+      setFlowType(null);
+      setCustomerView({ home: "new", machines: "machines", requests: "mine", account: "account" }[tab]);
+    }
+    window.scrollTo(0, 0);
+  };
 
   const signOut = async () => {
     await supabase.auth.signOut();
@@ -489,7 +513,7 @@ export default function HoseQuoteApp() {
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
             {view === "customer" && (
-              <div className="flex items-center gap-2 text-sm">
+              <div className="hidden sm:flex items-center gap-2 text-sm">
                 {customer ? (
                   <>
                     <button
@@ -520,7 +544,7 @@ export default function HoseQuoteApp() {
                 )}
               </div>
             )}
-          <nav className="flex items-center gap-1 bg-neutral-900 rounded-lg p-1">
+          <nav className="hidden sm:flex items-center gap-1 bg-neutral-900 rounded-lg p-1">
             {[
               { key: "customer", icon: Droplet, label: "Quote" },
               { key: "supplier", icon: Building2, label: "Supplier Portal" },
@@ -540,7 +564,8 @@ export default function HoseQuoteApp() {
         </div>
       </header>
 
-      <main className="max-w-3xl mx-auto px-5 py-8">
+      {/* pb: room for the phone tab bar (MobileNav) */}
+      <main className="max-w-3xl mx-auto px-5 pt-8 pb-28 sm:pb-8">
         {view === "customer" && flowType === null && customerView === "new" && (
           <FlowChooser
             onChoose={setFlowType}
@@ -548,6 +573,14 @@ export default function HoseQuoteApp() {
             onSignIn={() => setCustomerView("auth")}
             onMine={() => setCustomerView("mine")}
             onMachines={() => setCustomerView("machines")}
+          />
+        )}
+        {view === "customer" && flowType === null && customerView === "account" && (
+          <AccountPanel
+            email={customer?.email ?? null}
+            onSignIn={() => setCustomerView("auth")}
+            onSupplier={() => goTab("supplier")}
+            onSignOut={signOut}
           />
         )}
         {view === "customer" && flowType === null && customerView === "auth" && (
@@ -694,6 +727,8 @@ export default function HoseQuoteApp() {
           />
         )}
       </main>
+
+      <MobileNav active={mobileTab} showSupplier={supplierTab} onSelect={goTab} />
     </div>
   );
 }

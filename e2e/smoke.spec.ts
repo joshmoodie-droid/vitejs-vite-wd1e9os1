@@ -71,3 +71,17 @@ test("/r/ deep link with a malformed token shows 'not found'", async ({
     page.getByRole("heading", { name: "Request not found" }),
   ).toBeVisible();
 });
+
+test.describe("phone", () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test("bottom tab bar navigates and the header stays clean", async ({ page }) => {
+    await page.goto("/");
+    const nav = page.getByRole("navigation", { name: "Main" });
+    await expect(nav.getByRole("button")).toHaveText(["Home", "Machines", "Requests", "Account"]);
+    await expect(page.locator("header button:visible")).toHaveCount(0);
+    await nav.getByRole("button", { name: "Account" }).click();
+    await expect(page.getByRole("heading", { name: "Account" })).toBeVisible();
+    await expect(nav.getByRole("button", { name: "Account" })).toHaveAttribute("aria-current", "page");
+  });
+});
