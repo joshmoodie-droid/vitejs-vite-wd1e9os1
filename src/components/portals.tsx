@@ -3,13 +3,15 @@
 // RequestCard / JobQuoteCard lists; AdminPortal also hosts AdminSuppliers.
 
 import { useState } from "react";
-import { LogOut, Wrench, Settings, Building2, ClipboardCheck } from "lucide-react";
+import { LogOut, Wrench, Settings, Building2, ClipboardCheck, BadgePercent } from "lucide-react";
 import { RequestCard, JobQuoteCard } from "./portalCards";
 import { PricingAdmin } from "./PricingAdmin";
 import { AdminSuppliers } from "./AdminSuppliers";
 import { SupplierAudits } from "./audits/SupplierAudits";
+import { CommissionAdmin } from "./CommissionAdmin";
+import { dollars, percent, rateFor } from "../lib/commission";
 
-export function SupplierPortal({ supplier, authUserId, onLogout, requests, quotes, connections, pricing, onSavePricing, onSubmitManualQuote, onUnlock, onConfirmQuote, onRejectQuote, onUpdateFieldService, onMarkComplete, onReload }: any) {
+export function SupplierPortal({ supplier, authUserId, onLogout, requests, quotes, connections, commissions = [], commissionRates = {}, pricing, onSavePricing, onSubmitManualQuote, onUnlock, onConfirmQuote, onRejectQuote, onUpdateFieldService, onMarkComplete, onReload }: any) {
   const [tab, setTab] = useState("jobs");
   const [jobType, setJobType] = useState("quotes"); // "quotes" = hose assembly, "field" = field service jobs
   const [stage, setStage] = useState("new");
@@ -44,6 +46,11 @@ export function SupplierPortal({ supplier, authUserId, onLogout, requests, quote
         <div>
           <h1 className="text-2xl font-extrabold text-white">{supplier.companyName}</h1>
           <p className="text-neutral-500 text-sm">{supplier.serviceArea ? supplier.serviceArea : "All areas"}</p>
+          <p className="text-neutral-500 text-xs mt-0.5">
+            {rateFor(commissionRates, supplier.id).rate > 0
+              ? `HoseQuote fee: ${percent(rateFor(commissionRates, supplier.id).rate)} of each job (min ${dollars(rateFor(commissionRates, supplier.id).min)}, max ${dollars(rateFor(commissionRates, supplier.id).max)}), invoiced monthly.`
+              : "No HoseQuote fee on your jobs."}
+          </p>
         </div>
         <button onClick={onLogout} className="flex items-center gap-1.5 text-sm text-neutral-400 hover:text-white border border-neutral-700 rounded-lg px-3 py-2">
           <LogOut className="w-3.5 h-3.5" /> Log out
@@ -113,6 +120,7 @@ export function SupplierPortal({ supplier, authUserId, onLogout, requests, quote
                     key={q.id} q={q} req={req} unlocked={conn?.unlocked}
                     pricing={pricing} onConfirmQuote={onConfirmQuote} onRejectQuote={onRejectQuote}
                     onUpdateFieldService={onUpdateFieldService} onUnlock={onUnlock} onMarkComplete={onMarkComplete}
+                    commission={commissions.find((c) => c.quoteId === q.id)}
                   />
                 );
               })}
@@ -134,6 +142,7 @@ export function SupplierPortal({ supplier, authUserId, onLogout, requests, quote
                     key={q.id} q={q} req={req} unlocked={conn?.unlocked}
                     pricing={pricing} onConfirmQuote={onConfirmQuote} onRejectQuote={onRejectQuote}
                     onUpdateFieldService={onUpdateFieldService} onUnlock={onUnlock} onMarkComplete={onMarkComplete}
+                    commission={commissions.find((c) => c.quoteId === q.id)}
                   />
                 );
               })}
@@ -150,7 +159,7 @@ export function SupplierPortal({ supplier, authUserId, onLogout, requests, quote
 }
 
 export function AdminPortal({
-  authUserId, onLogout, suppliers, pricingBySupplier, requests, quotes, connections,
+  authUserId, onLogout, suppliers, pricingBySupplier, requests, quotes, connections, commissions = [], commissionRates = {},
   onSavePricing, onSubmitManualQuote, onUnlock, onConfirmQuote, onRejectQuote, onUpdateFieldService, onMarkComplete, onEditQuote, onReload,
   onAddSupplier, onUpdateSupplier, onDeleteSupplier,
 }: any) {
@@ -198,15 +207,20 @@ export function AdminPortal({
           { key: "jobs", label: "Jobs", icon: Wrench },
           { key: "audits", label: "Audits", icon: ClipboardCheck },
           { key: "suppliers", label: "Suppliers", icon: Building2 },
+          { key: "commission", label: "Commission", icon: BadgePercent },
         ].map((t) => (
-          <button key={t.key} onClick={() => setTab(t.key)} className={`flex-1 py-2 rounded-md font-semibold text-sm transition-colors flex items-center justify-center gap-1.5 ${tab === t.key ? "bg-orange-500 text-black" : "text-neutral-400"}`}>
-            <t.icon className="w-4 h-4" /> {t.label}
+          <button key={t.key} onClick={() => setTab(t.key)} className={`flex-1 min-w-0 py-2 rounded-md font-semibold text-xs sm:text-sm transition-colors flex items-center justify-center gap-1.5 ${tab === t.key ? "bg-orange-500 text-black" : "text-neutral-400"}`}>
+            <t.icon className="w-4 h-4 shrink-0 hidden sm:block" /> {t.label}
           </button>
         ))}
       </div>
 
       {tab === "audits" && (
         <SupplierAudits userId={authUserId} suppliers={suppliers} pricingBySupplier={pricingBySupplier} onQuoteCreated={onReload} />
+      )}
+
+      {tab === "commission" && (
+        <CommissionAdmin commissions={commissions} rates={commissionRates} suppliers={suppliers} requests={requests} onReload={onReload} />
       )}
 
       {tab === "jobs" && (
@@ -273,7 +287,7 @@ export function AdminPortal({
                       q={q} req={req} unlocked={conn?.unlocked}
                       pricing={pricingBySupplier[q.supplierId]} onConfirmQuote={onConfirmQuote} onRejectQuote={onRejectQuote}
                       onUpdateFieldService={onUpdateFieldService} onUnlock={onUnlock} onMarkComplete={onMarkComplete}
-                      onEditQuote={onEditQuote}
+                      onEditQuote={onEditQuote} commission={commissions.find((c) => c.quoteId === q.id)}
                     />
                   </div>
                 );

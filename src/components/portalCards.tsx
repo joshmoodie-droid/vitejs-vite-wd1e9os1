@@ -5,12 +5,13 @@
 import { useState } from "react";
 import { Unlock, Lock, CheckCircle2, Settings } from "lucide-react";
 import { combinedTotal } from "../lib/pricing";
+import { dollars, percent } from "../lib/commission";
 import { URGENCY } from "../lib/catalog";
 import { Badge, inputClass } from "./ui";
 import { BookingSpec, ManufacturingSpec, AssemblyPriceBreakdown } from "./specs";
 import { ActiveQuoteEditor, SupplierFieldServiceReview, AutoQuoteReview } from "./quoteEditors";
 
-export function JobQuoteCard({ q, req, unlocked, pricing, onUpdateFieldService, onUnlock, onMarkComplete, onEditQuote }: any) {
+export function JobQuoteCard({ q, req, unlocked, pricing, onUpdateFieldService, onUnlock, onMarkComplete, onEditQuote, commission }: any) {
   const [editing, setEditing] = useState(false);
   const isCompleted = q.status === "completed";
   const isAccepted = q.status === "accepted" || isCompleted;
@@ -71,6 +72,16 @@ export function JobQuoteCard({ q, req, unlocked, pricing, onUpdateFieldService, 
           </div>
         );
       })()}
+
+      {/* HoseQuote's fee on this job (commissions, 0021) — supplier & admin only */}
+      {isAccepted && commission && (
+        <div className="text-xs text-neutral-500 mb-2">
+          {commission.rate > 0
+            ? `HoseQuote fee ${dollars(commission.amount)} (${percent(commission.rate)} of ${dollars(commission.jobValue)})`
+            : "No HoseQuote fee on this job"}
+          {commission.invoicedAt ? " · invoiced" : ""}
+        </div>
+      )}
 
       {req && (q.isBooking ? <BookingSpec r={req} /> : <ManufacturingSpec r={req} compact />)}
 

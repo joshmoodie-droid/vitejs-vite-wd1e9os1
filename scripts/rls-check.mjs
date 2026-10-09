@@ -9,6 +9,7 @@
 //   - machines / machine_hoses / service_log / hose_checks -> no anon access (0012, 0015)
 //   - audits / audit_items -> no anon access; anon can't call book_audit (0016)
 //     or create_quote_from_audit (0019)
+//   - commissions / supplier_commission -> no anon access (0021)
 //   - suppliers / supplier_pricing     -> still world-readable (customer picker)
 //   - every table                      -> anon cannot INSERT / UPDATE
 //   - the sanctioned anon path (SECURITY DEFINER RPCs) still callable
@@ -90,8 +91,11 @@ for (const table of ["requests", "quotes", "connections"]) {
 // anon has no grants on these at all, so PostgREST answers 401/403
 // (permission denied) rather than 200 []. Either means no rows leaked. These
 // tables may be empty, so the INSERT probes in section 3 are the real guard.
-for (const table of ["machines", "machine_hoses", "service_log", "hose_checks", "audits", "audit_items"]) {
-  const res = await api(`/${table}?select=id&limit=5`);
+for (const table of [
+  "machines", "machine_hoses", "service_log", "hose_checks", "audits", "audit_items",
+  "commissions", "supplier_commission",
+]) {
+  const res = await api(`/${table}?select=*&limit=5`);
   let body = null;
   try {
     body = await res.json();
@@ -160,6 +164,8 @@ const inserts = [
   ["hose_checks", { machine_id: "00000000-0000-0000-0000-000000000000", condition: "ok" }],
   ["audits", { supplier_id: realSupplier?.id ?? NONE, source: "supplier", customer_name: `${marker} (delete me)` }],
   ["audit_items", { audit_id: "00000000-0000-0000-0000-000000000000", machine_label: marker, position: marker, condition: "ok" }],
+  ["commissions", { quote_id: marker, supplier_id: realSupplier?.id ?? NONE, request_id: marker, status: "completed", rate: 0 }],
+  ["supplier_commission", { supplier_id: realSupplier?.id ?? NONE, rate: 0 }],
 ];
 for (const [table, row] of inserts) {
   const res = await api(`/${table}`, {

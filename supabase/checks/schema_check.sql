@@ -17,6 +17,9 @@ select item, ok from (values
   ('0019 create_quote_from_audit function',            exists (select 1 from pg_proc where proname = 'create_quote_from_audit')),
   ('0019 multi-machine job -> register',               exists (select 1 from pg_proc where proname = 'log_completed_job_to_register' and prosrc like '%v_logged%')),
   ('0019 quote link shows what is quoted',             exists (select 1 from pg_proc where proname = 'get_request_by_token' and prosrc like '%from_audit%')),
-  ('0020 job log shows full price',                    exists (select 1 from pg_proc where proname = 'log_completed_job_to_register' and prosrc like '%v_extra%'))
+  ('0020 job log shows full price',                    exists (select 1 from pg_proc where proname = 'log_completed_job_to_register' and prosrc like '%v_extra%')),
+  ('0021 commissions table',                           to_regclass('public.commissions') is not null),
+  ('0021 supplier commission rates',                   to_regclass('public.supplier_commission') is not null),
+  ('0021 accepted job -> commission trigger',          exists (select 1 from pg_trigger where tgname = 'quotes_sync_commission'))
 ) as checks(item, ok)
 order by item;
