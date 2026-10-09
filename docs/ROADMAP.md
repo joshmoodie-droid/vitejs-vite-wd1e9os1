@@ -199,3 +199,55 @@ Function using the existing Resend setup.
 3. Date-based reminders (scheduled Edge Function + email).
 4. Hour-based reminders, attachments, PDF/CSV export.
 5. QR cab stickers / hose tags; paid Business tier; multi-user fleet accounts.
+
+---
+
+## 6. Photo-based hose checks → jobs
+
+Today a request only takes a pasted "Photo URL" text field (`flows.tsx`) — no
+real upload. Idea: make the camera the main way in.
+
+### Flow
+1. **Snap** — customer opens the app on site, taps "Check a hose", takes 1–3
+   photos (whole hose, each fitting/crimp, the layline printing on the hose).
+2. **Tag** — pick the machine + hose position from the maintenance register (or
+   add new). Quick condition rating: OK / Watch / Replace soon / Leaking now.
+3. **Decide** — "All good" saves it to the history. "Get a quote" turns the
+   photos straight into a request: spec pre-filled from the register if the
+   hose is known; otherwise the supplier identifies it from the photos.
+   Customer picks urgency + when it suits (date/time window, workshop drop-off,
+   pickup/delivery or on-site).
+
+### Weekly / regular checks
+- Reminder ("Weekly hose check — 3 machines") by email/push, schedule set by
+  the customer.
+- Guided checklist per machine: snap each tagged hose, tick condition.
+- **Timeline per hose** — photos side by side over weeks to spot wear
+  developing (abrasion, cracking, bulging, weeping at fittings, kinks).
+- Doubles as a **pre-start / safety inspection record** (WHS evidence),
+  exportable with the maintenance register.
+
+### Helpers
+- Photo tips overlay: include a tape measure, photo the layline text and both
+  fittings → suppliers can quote without a site visit.
+- Optional AI assist (later): read layline text, suggest hose type/bore and
+  fitting type, flag visible wear. Advisory only — "a supplier should inspect",
+  never a safety sign-off.
+- Supplier side: photos shown in the request; supplier can reply "looks fine
+  for now, re-check in 4 weeks" or quote.
+
+### Commercial angle
+- Weekly habit → customers open the app when nothing is broken.
+- "Replace soon" photos become planned jobs (cheaper for customer, booked
+  workshop time for supplier) instead of emergency callouts.
+- Fits the paid Business tier (unlimited photo history, scheduled checks, export).
+
+### Build notes
+- Supabase Storage bucket, private, per-customer RLS; signed URLs for suppliers
+  on a request.
+- Compress client-side (~200–400 KB/photo). Pro includes 100 GB storage —
+  ~250k+ photos.
+- Table sketch: `hose_checks (id, machine_id, machine_hose_id, checked_at,
+  condition, notes, photos jsonb, request_id)`.
+- Mobile: `<input type="file" accept="image/*" capture="environment">` works in
+  the browser/PWA without a native app.
