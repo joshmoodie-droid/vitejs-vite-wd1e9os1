@@ -639,6 +639,7 @@ export default function HoseQuoteApp() {
         )}
         {view === "supplier" && customer && supplierResolved && isAdmin && (
           <AdminPortal
+            authUserId={customer?.id}
             onLogout={signOut}
             suppliers={suppliers}
             pricingBySupplier={pricingBySupplier}
