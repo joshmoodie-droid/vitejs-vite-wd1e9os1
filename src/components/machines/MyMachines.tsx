@@ -8,7 +8,7 @@ import { MachineForm } from "./forms";
 import { MachineDetail } from "./MachineDetail";
 import { listMachines, createMachine, emptyMachine, type Machine, type QuotePrefill } from "../../lib/machines";
 
-export function MyMachines({ email, onQuote }: { email?: string; onQuote: (prefill: QuotePrefill) => void }) {
+export function MyMachines({ userId, email, onQuote }: { userId: string; email?: string; onQuote: (prefill: QuotePrefill) => void }) {
   const [machines, setMachines] = useState<Machine[] | null>(null);
   const [loadError, setLoadError] = useState("");
   const [adding, setAdding] = useState(false);
@@ -29,6 +29,7 @@ export function MyMachines({ email, onQuote }: { email?: string; onQuote: (prefi
     return (
       <MachineDetail
         machine={open}
+        userId={userId}
         onQuote={onQuote}
         onBack={() => setOpenId(null)}
         onUpdated={(m) => setMachines((ms) => (ms || []).map((x) => (x.id === m.id ? m : x)).sort(byName))}

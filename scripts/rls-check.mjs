@@ -6,7 +6,7 @@
 //
 // Contract (see supabase/migrations/0006_phase3c_rls_lockdown.sql):
 //   - requests / quotes / connections  -> invisible to anon (SELECT returns [])
-//   - machines / machine_hoses / service_log -> no anon access at all (0012)
+//   - machines / machine_hoses / service_log / hose_checks -> no anon access (0012, 0015)
 //   - suppliers / supplier_pricing     -> still world-readable (customer picker)
 //   - every table                      -> anon cannot INSERT / UPDATE
 //   - the sanctioned anon path (SECURITY DEFINER RPCs) still callable
@@ -88,7 +88,7 @@ for (const table of ["requests", "quotes", "connections"]) {
 // anon has no grants on these at all, so PostgREST answers 401/403
 // (permission denied) rather than 200 []. Either means no rows leaked. These
 // tables may be empty, so the INSERT probes in section 3 are the real guard.
-for (const table of ["machines", "machine_hoses", "service_log"]) {
+for (const table of ["machines", "machine_hoses", "service_log", "hose_checks"]) {
   const res = await api(`/${table}?select=id&limit=5`);
   let body = null;
   try {
@@ -155,6 +155,7 @@ const inserts = [
   ["machines", { name: `${marker} (delete me)` }],
   ["machine_hoses", { machine_id: "00000000-0000-0000-0000-000000000000", position: marker }],
   ["service_log", { machine_id: "00000000-0000-0000-0000-000000000000" }],
+  ["hose_checks", { machine_id: "00000000-0000-0000-0000-000000000000", condition: "ok" }],
 ];
 for (const [table, row] of inserts) {
   const res = await api(`/${table}`, {

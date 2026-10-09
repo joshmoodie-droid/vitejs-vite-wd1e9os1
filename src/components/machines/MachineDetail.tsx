@@ -1,9 +1,16 @@
-// One machine: its details, hose register and service log. Loads its own
-// hoses/log; machine edits and deletes are reported up to MyMachines so the
-// list stays in sync.
+// One machine: its details, hose register, service log and hose checks.
+// Loads its own hoses/log/checks; machine edits and deletes are reported up
+// to MyMachines so the list stays in sync.
 
 import { Fragment, useEffect, useState, type ReactNode } from "react";
-import { ArrowLeft, Pencil, Trash2, Plus, RotateCcw, Send } from "lucide-react";
+import { ArrowLeft, Pencil, Trash2, Plus, RotateCcw, Send, ClipboardCheck, AlertTriangle } from "lucide-react";
+import { Badge } from "../ui";
+import { HoseCheckFlow } from "../checks/HoseCheckFlow";
+import { CheckHistory } from "../checks/CheckHistory";
+import {
+  listChecks, deleteCheck, latestByHose, quoteFromChecks, conditionInfo,
+  type HoseCheck,
+} from "../../lib/checks";
 import { MachineForm, HoseForm, LogForm } from "./forms";
 import {
   listHoses, createHose, updateHose, deleteHose,
@@ -16,14 +23,15 @@ import {
 const formatDate = (iso: string) =>
   iso ? new Date(`${iso}T00:00:00`).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" }) : "";
 
-type Tab = "hoses" | "log";
+type Tab = "hoses" | "checks" | "log";
 // What's open in the current tab: nothing, an "add" form, or an edit form for one row.
 type Editing = null | "new" | string;
 
 export function MachineDetail({
-  machine, onQuote, onBack, onUpdated, onDeleted,
+  machine, userId, onQuote, onBack, onUpdated, onDeleted,
 }: {
   machine: Machine;
+  userId: string;
   onQuote: (prefill: QuotePrefill) => void;
   onBack: () => void;
   onUpdated: (m: Machine) => void;
@@ -33,14 +41,17 @@ export function MachineDetail({
   const [tab, setTab] = useState<Tab>("hoses");
   const [hoses, setHoses] = useState<MachineHose[] | null>(null);
   const [log, setLog] = useState<ServiceLogEntry[] | null>(null);
+  const [checks, setChecks] = useState<HoseCheck[] | null>(null);
+  // Hose check in progress: every hose on the machine, or just one.
+  const [checking, setChecking] = useState<null | "all" | string>(null);
   const [editing, setEditing] = useState<Editing>(null);
   const [loadError, setLoadError] = useState("");
   const [actionError, setActionError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([listHoses(machine.id), listLog(machine.id)])
-      .then(([h, l]) => { if (!cancelled) { setHoses(h); setLog(l); } })
+    Promise.all([listHoses(machine.id), listLog(machine.id), listChecks(machine.id)])
+      .then(([h, l, c]) => { if (!cancelled) { setHoses(h); setLog(l); setChecks(c); } })
       .catch((e) => { if (!cancelled) setLoadError(e instanceof Error ? e.message : String(e)); });
     return () => { cancelled = true; };
   }, [machine.id]);
@@ -58,6 +69,10 @@ export function MachineDetail({
     }
   };
 
+  const latest = latestByHose(checks ?? []);
+  const wornQuote = hoses && checks ? quoteFromChecks(machine.id, hoses, checks) : null;
+  const wornCount = wornQuote?.assemblies?.length ?? 0;
+
   const details = [
     [machine.make, machine.model].filter(Boolean).join(" "),
     machine.year && `${machine.year}`,
@@ -66,6 +81,24 @@ export function MachineDetail({
     machine.hours && `${machine.hours} hrs`,
     machine.site,
   ].filter(Boolean);
+
+  if (checking && hoses) {
+    return (
+      <HoseCheckFlow
+        machineId={machine.id}
+        hoses={checking === "all" ? hoses : hoses.filter((h) => h.id === checking)}
+        userId={userId}
+        onCancel={() => setChecking(null)}
+        onSaved={async (saved) => {
+          setChecks((cs) => [...saved, ...(cs || [])].sort((a, b) => b.checkedAt.localeCompare(a.checkedAt)));
+          setChecking(null);
+          setTab("checks");
+          // saveChecks added an "Inspection" entry to the service log
+          listLog(machine.id).then(setLog).catch(() => {});
+        }}
+      />
+    );
+  }
 
   if (editingMachine) {
     return (
@@ -92,12 +125,22 @@ export function MachineDetail({
           <h1 className="text-2xl font-extrabold text-white break-words">{machine.name}</h1>
           {details.length > 0 && <p className="text-neutral-400 text-sm mt-1">{details.join(" · ")}</p>}
           {machine.notes && <p className="text-neutral-500 text-sm mt-2 whitespace-pre-wrap">{machine.notes}</p>}
-          <button
-            onClick={() => onQuote({ machineId: machine.id })}
-            className="mt-3 flex items-center gap-2 border border-orange-500/60 text-orange-400 hover:bg-orange-500/10 font-semibold text-sm px-3 py-2 rounded-lg"
-          >
-            <Send className="w-3.5 h-3.5" /> Get a hose quote
-          </button>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              onClick={() => setChecking("all")}
+              disabled={!hoses || hoses.length === 0}
+              title={hoses?.length === 0 ? "Add the machine's hoses first" : undefined}
+              className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-40 text-black font-bold text-sm px-3 py-2 rounded-lg"
+            >
+              <ClipboardCheck className="w-3.5 h-3.5" /> Check hoses
+            </button>
+            <button
+              onClick={() => onQuote({ machineId: machine.id })}
+              className="flex items-center gap-2 border border-orange-500/60 text-orange-400 hover:bg-orange-500/10 font-semibold text-sm px-3 py-2 rounded-lg"
+            >
+              <Send className="w-3.5 h-3.5" /> Get a hose quote
+            </button>
+          </div>
         </div>
         <div className="flex gap-1 shrink-0">
           <button onClick={() => setEditingMachine(true)} title="Edit machine" aria-label="Edit machine" className="p-2 text-neutral-400 hover:text-white">
@@ -115,11 +158,30 @@ export function MachineDetail({
         </div>
       </div>
 
-      <div className="flex gap-1 bg-neutral-900 rounded-lg p-1 mb-5 w-fit">
-        {([["hoses", `Hoses${hoses ? ` (${hoses.length})` : ""}`], ["log", `Service log${log ? ` (${log.length})` : ""}`]] as const).map(([key, label]) => (
+      {wornQuote && (
+        <div className="mb-5 rounded-xl border border-orange-500/50 bg-orange-500/10 p-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-orange-300 text-sm font-semibold">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            {wornCount} hose{wornCount === 1 ? "" : "s"} need{wornCount === 1 ? "s" : ""} replacing, from the latest check
+          </div>
+          <button
+            onClick={() => onQuote(wornQuote)}
+            className="bg-orange-500 hover:bg-orange-600 text-black font-bold text-sm px-3 py-2 rounded-lg"
+          >
+            Get a quote for {wornCount === 1 ? "it" : "them"}
+          </button>
+        </div>
+      )}
+
+      <div className="flex gap-1 bg-neutral-900 rounded-lg p-1 mb-5 w-fit max-w-full overflow-x-auto">
+        {([
+          ["hoses", `Hoses${hoses ? ` (${hoses.length})` : ""}`],
+          ["checks", `Checks${checks ? ` (${checks.length})` : ""}`],
+          ["log", `Log${log ? ` (${log.length})` : ""}`],
+        ] as const).map(([key, label]) => (
           <button
             key={key} onClick={() => switchTab(key)}
-            className={`px-4 py-2 rounded-md text-sm font-semibold transition-colors ${tab === key ? "bg-orange-500 text-black" : "text-neutral-400 hover:text-white"}`}
+            className={`px-3 sm:px-4 py-2 rounded-md text-sm font-semibold whitespace-nowrap transition-colors ${tab === key ? "bg-orange-500 text-black" : "text-neutral-400 hover:text-white"}`}
           >
             {label}
           </button>
@@ -162,9 +224,13 @@ export function MachineDetail({
               ) : (
                 <Row
                   title={h.position}
+                  badge={latest.get(h.id) && conditionInfo(latest.get(h.id)!.condition)}
                   subtitle={describeHoseSpec(h.spec)}
                   meta={[h.installedAt && `Fitted ${formatDate(h.installedAt)}`, h.notes].filter(Boolean).join(" · ")}
-                  action={{ label: "Order again", onClick: () => onQuote({ machineId: machine.id, assemblies: [assemblyFromHose(h)] }) }}
+                  actions={[
+                    { label: "Check", icon: ClipboardCheck, onClick: () => setChecking(h.id) },
+                    { label: "Order again", icon: RotateCcw, onClick: () => onQuote({ machineId: machine.id, assemblies: [assemblyFromHose(h)] }) },
+                  ]}
                   onEdit={() => setEditing(h.id)}
                   onDelete={() => confirmAndRun(`Remove “${h.position}” from the hose register?`, async () => {
                     await deleteHose(h.id);
@@ -175,6 +241,19 @@ export function MachineDetail({
             </Fragment>
           ))}
         </Section>
+      )}
+
+      {tab === "checks" && (
+        checks === null && !loadError ? <p className="text-neutral-500">Loading…</p> : (
+          <CheckHistory
+            hoses={hoses || []}
+            checks={checks || []}
+            onDelete={(c) => confirmAndRun("Delete this check and its photos from the history?", async () => {
+              await deleteCheck(c.id);
+              setChecks((cs) => (cs || []).filter((x) => x.id !== c.id));
+            })}
+          />
+        )
       )}
 
       {tab === "log" && (
@@ -258,26 +337,35 @@ function Section({
   );
 }
 
+type RowAction = { label: string; icon: typeof Pencil; onClick: () => void };
+
 function Row({
-  title, subtitle, meta, action, onEdit, onDelete,
+  title, badge, subtitle, meta, actions, onEdit, onDelete,
 }: {
-  title: string; subtitle?: string; meta?: string;
-  action?: { label: string; onClick: () => void };
+  title: string; badge?: { label: string; tone: string } | false; subtitle?: string; meta?: string;
+  actions?: RowAction[];
   onEdit: () => void; onDelete: () => void;
 }) {
   return (
     <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-4 flex items-start justify-between gap-3">
       <div className="min-w-0">
-        <div className="text-white font-semibold break-words">{title}</div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-white font-semibold break-words">{title}</span>
+          {badge && <Badge tone={badge.tone}>{badge.label}</Badge>}
+        </div>
         {subtitle && <div className="text-sm text-neutral-400 mt-0.5 whitespace-pre-wrap break-words">{subtitle}</div>}
         {meta && <div className="text-xs text-neutral-500 mt-1 break-words">{meta}</div>}
-        {action && (
-          <button
-            onClick={action.onClick}
-            className="mt-2 flex items-center gap-1.5 text-orange-400 hover:text-orange-300 text-sm font-semibold"
-          >
-            <RotateCcw className="w-3.5 h-3.5" /> {action.label}
-          </button>
+        {actions && actions.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+            {actions.map((a) => (
+              <button
+                key={a.label} onClick={a.onClick}
+                className="flex items-center gap-1.5 text-orange-400 hover:text-orange-300 text-sm font-semibold"
+              >
+                <a.icon className="w-3.5 h-3.5" /> {a.label}
+              </button>
+            ))}
+          </div>
         )}
       </div>
       <div className="flex gap-1 shrink-0">
