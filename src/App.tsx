@@ -654,6 +654,7 @@ export default function HoseQuoteApp() {
             onUpdateFieldService={updateFieldService}
             onMarkComplete={markComplete}
             onEditQuote={editQuote}
+            onReload={() => loadAll({ quiet: true })}
             onAddSupplier={addSupplier}
             onUpdateSupplier={updateSupplier}
             onDeleteSupplier={deleteSupplier}
@@ -675,6 +676,7 @@ export default function HoseQuoteApp() {
             onRejectQuote={rejectQuote}
             onUpdateFieldService={updateFieldService}
             onMarkComplete={markComplete}
+            onReload={() => loadAll({ quiet: true })}
           />
         )}
       </main>

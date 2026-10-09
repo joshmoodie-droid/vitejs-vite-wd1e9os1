@@ -121,6 +121,9 @@ function fulfillmentSupplierNote(req: any): string {
 }
 
 async function onRequestCreated(req: any) {
+  // Quotes a supplier builds from a hose audit (create_quote_from_audit) are
+  // confirmed straight away — the "quote ready" email below covers it.
+  if (req.audit_id) return;
   const supplier = await getSupplier(req.selected_supplier_id);
   const kind = req.request_type === "booking" ? "field service booking" : "hose quote request";
   const custNote = fulfillmentNote(req);
@@ -156,12 +159,25 @@ async function onQuoteStatusChange(quote: any, oldStatus: string) {
 
   switch (quote.status) {
     case "confirmed": {
+      // On-site costs already priced (e.g. a quote from a hose audit) are part
+      // of the total, as on the quote page.
+      const fs = quote.field_service;
+      const onSite = fs?.requested && (fs.status === "quoted" || fs.status === "confirmed")
+        ? (Number(fs.calloutFee) || 0) + (Number(fs.travelCharge) || 0) + (Number(fs.labour) || 0)
+        : 0;
+      const lo = Number(quote.price_low) + onSite;
+      const hi = quote.price_high == null ? quote.price_high : Number(quote.price_high) + onSite;
+      const hoses = Array.isArray(req.assemblies) ? req.assemblies.length : 0;
+      const intro = req.audit_id
+        ? `Following your hose audit, ${supplier?.company_name ? `<b>${supplier.company_name}</b> has` : "your supplier has"} quoted to replace
+           ${hoses} hose${hoses === 1 ? "" : "s"}${req.field_service_requested ? ", fitted on site" : ""}.<br>`
+        : "";
       await sendEmail(
         req.email,
         `Your quote is ready — ${req.id}`,
         shell(
           "A supplier has confirmed your quote",
-          `Estimated total: <b>${money(quote.price_low, quote.price_high)}</b>, about ${quote.lead_time_days} day(s) lead time.
+          `${intro}Estimated total: <b>${money(lo, hi)}</b>${onSite ? " including on-site installation" : ""}, about ${quote.lead_time_days} day(s) lead time.
            Review it and accept when you're ready.`,
           { label: "View & accept quote", url: customerLink(req) },
         ),

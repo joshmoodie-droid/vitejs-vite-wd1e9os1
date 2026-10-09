@@ -15,17 +15,20 @@ import {
 const when = (iso: string) =>
   iso ? new Date(`${iso.slice(0, 10)}T00:00:00`).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" }) : "";
 
-type Pricing = { auditFee?: number; auditFeePerMachine?: number };
+// Full supplier pricing (lib/rows): audit fees for new audits, the rest for
+// quotes made from an audit.
+type Pricing = { auditFee?: number; auditFeePerMachine?: number } & Record<string, any>;
 type SupplierRef = { id: string; companyName: string };
 
 export function SupplierAudits({
-  supplierId, userId, pricing, suppliers, pricingBySupplier,
+  supplierId, userId, pricing, suppliers, pricingBySupplier, onQuoteCreated,
 }: {
   supplierId?: string;
   userId: string;
   pricing?: Pricing;
   suppliers?: SupplierRef[];
   pricingBySupplier?: Record<string, Pricing>;
+  onQuoteCreated?: () => void;
 }) {
   const admin = !supplierId;
   const [audits, setAudits] = useState<Audit[] | null>(null);
@@ -49,6 +52,7 @@ export function SupplierAudits({
     return (
       <AuditEditor
         audit={open} userId={userId} onBack={() => setOpenId(null)}
+        pricing={pricing ?? pricingBySupplier?.[open.supplierId]} onQuoteCreated={onQuoteCreated}
         onUpdated={(a) => setAudits((as) => (as || []).map((x) => (x.id === a.id ? a : x)))}
       />
     );
