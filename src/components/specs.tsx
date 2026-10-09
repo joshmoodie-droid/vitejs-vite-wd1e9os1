@@ -3,6 +3,7 @@
 
 import { URGENCY } from "../lib/catalog";
 import { calcEstimate } from "../lib/pricing";
+import { RequestPhotos } from "./photos/RequestPhotos";
 
 export function BookingSpec({ r }) {
   return (
@@ -17,6 +18,7 @@ export function BookingSpec({ r }) {
       {r.labourHoursEstimate && <div className="text-orange-400 pt-1 border-t border-neutral-800"><span className="text-neutral-500">Customer's time estimate:</span> {r.labourHoursEstimate} hour{parseFloat(r.labourHoursEstimate) !== 1 ? "s" : ""}</div>}
       {r.notes && <div className="text-neutral-300 pt-1 border-t border-neutral-800"><span className="text-neutral-500">Notes:</span> {r.notes}</div>}
       {r.photoUrl && <div className="text-neutral-300"><span className="text-neutral-500">Photo:</span> <span className="text-orange-500 underline break-all">{r.photoUrl}</span></div>}
+      <RequestPhotos photos={r.photos} />
     </div>
   );
 }
@@ -73,6 +75,7 @@ export function ManufacturingSpec({ r, compact }: any) {
       </div>
       {r.notes && <div className="text-neutral-300 pt-1 border-t border-neutral-800 mt-1"><span className="text-neutral-500">Notes:</span> {r.notes}</div>}
       {r.photoUrl && <div className="text-neutral-300"><span className="text-neutral-500">Photo:</span> <span className="text-orange-500 underline break-all">{r.photoUrl}</span></div>}
+      <RequestPhotos photos={r.photos} />
       {r.fieldServiceRequested && (
         <div className="text-orange-400 pt-1 border-t border-neutral-800 mt-1">
           <span className="text-neutral-500">On-site service requested:</span> {r.siteAddress}{r.accessNotes ? ` — ${r.accessNotes}` : ""}

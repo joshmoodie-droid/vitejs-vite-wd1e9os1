@@ -11,6 +11,7 @@
 //   - every table                      -> anon cannot INSERT / UPDATE
 //   - the sanctioned anon path (SECURITY DEFINER RPCs) still callable
 //   - create_request rejects a machine_id the caller doesn't own (0013)
+//   - the `photos` storage bucket: no anon upload, no public reads (0014)
 //
 // Run: `npm run test:rls`. Needs VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY
 // (from the environment, or a local .env). Read-only apart from writes that RLS
@@ -257,6 +258,34 @@ if (realSupplier) {
     "anon cannot link a request to a machine",
     !res.ok && /another customer's machine/.test(body?.message ?? ""),
     `expected the ownership error — got ${res.status}, ${JSON.stringify(body)?.slice(0, 160)}`,
+  );
+}
+
+// --- 7. request photos bucket is private (0014) -----------------------------
+// anon may not upload, and nothing in `photos` is served publicly.
+{
+  const STORAGE = `${SUPABASE_URL.replace(/\/$/, "")}/storage/v1`;
+  const path = `rls-check/${marker}.jpg`;
+  const up = await fetch(`${STORAGE}/object/photos/${path}`, {
+    method: "POST",
+    headers: { ...authHeaders, "content-type": "image/jpeg" },
+    body: new Uint8Array([0xff, 0xd8, 0xff, 0xd9]),
+  });
+  if (up.ok) {
+    const del = await fetch(`${STORAGE}/object/photos/${path}`, { method: "DELETE", headers: authHeaders });
+    fail(
+      "anon cannot upload to photos",
+      `UPLOAD SUCCEEDED (${up.status}); ${del.ok ? "test object deleted" : `COULD NOT DELETE photos/${path}`}`,
+    );
+  } else {
+    pass("anon cannot upload to photos", `rejected ${up.status}`);
+  }
+
+  const pub = await fetch(`${STORAGE}/object/public/photos/${path}`);
+  check(
+    "photos bucket is not public",
+    !pub.ok,
+    `public URL answered ${pub.status} — the bucket must stay private`,
   );
 }
 
