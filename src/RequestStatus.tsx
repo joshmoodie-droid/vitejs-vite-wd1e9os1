@@ -16,6 +16,21 @@ const STATUS_LABEL: Record<string, string> = {
   completed: "Job complete",
 };
 
+// On-site costs live in field_service once the supplier has priced them; the
+// quote's price_low/high cover the hoses (+ delivery). Same as lib/pricing
+// combinedTotal, on the raw rows this page gets.
+function onSiteExtra(q: any): { callout: number; travel: number; labour: number; total: number } | null {
+  const fs = q.field_service;
+  if (!fs?.requested || (fs.status !== "quoted" && fs.status !== "confirmed")) return null;
+  const callout = Number(fs.calloutFee) || 0;
+  const travel = Number(fs.travelCharge) || 0;
+  const labour = Number(fs.labour) || 0;
+  return { callout, travel, labour, total: callout + travel + labour };
+}
+
+const describeAssembly = (a: any) =>
+  [a.hoseType, a.bore && `${String(a.bore).replace(/_/g, "/")}"`, a.length && `${a.length} m`].filter(Boolean).join(" · ");
+
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -122,7 +137,9 @@ export default function RequestStatus({
               <div className="text-orange-500 text-xs font-bold tracking-widest uppercase mb-1">
                 {request.request_type === "booking"
                   ? "Field service booking"
-                  : "Hose quote request"}
+                  : request.from_audit
+                    ? "Quote from your hose audit"
+                    : "Hose quote request"}
               </div>
               <h1 className="text-2xl font-extrabold">
                 Reference{" "}
@@ -136,6 +153,30 @@ export default function RequestStatus({
                   : ""}
               </p>
             </div>
+
+            {Array.isArray(request.assemblies) && request.assemblies.length > 0 && (
+              <div className={`${card} mb-4 text-sm`}>
+                <div className="text-neutral-500 text-xs font-semibold uppercase tracking-wide mb-2">
+                  {request.assemblies.length} hose{request.assemblies.length === 1 ? "" : "s"} quoted
+                  {request.field_service_requested
+                    ? " · fitted on site"
+                    : request.fulfillment === "delivery"
+                      ? ` · delivered${request.delivery_address ? ` to ${request.delivery_address}` : ""}`
+                      : " · for pickup"}
+                </div>
+                <ul className="space-y-1">
+                  {request.assemblies.map((a: any, i: number) => (
+                    <li key={a.id || i} className="text-neutral-200">
+                      {a.label || `Assembly ${i + 1}`}
+                      {describeAssembly(a) && <span className="text-neutral-500"> — {describeAssembly(a)}</span>}
+                    </li>
+                  ))}
+                </ul>
+                {request.notes && (
+                  <p className="text-neutral-400 mt-2 pt-2 border-t border-neutral-800 whitespace-pre-wrap">{request.notes}</p>
+                )}
+              </div>
+            )}
 
             {error && (
               <div className="mb-4 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
@@ -174,11 +215,16 @@ export default function RequestStatus({
                       </span>
                     </div>
                     <div className="text-2xl font-extrabold text-orange-500">
-                      ${q.price_low}
+                      ${Number(q.price_low) + (onSiteExtra(q)?.total ?? 0)}
                       {q.price_high != null && q.price_high !== q.price_low
-                        ? ` – $${q.price_high}`
+                        ? ` – $${Number(q.price_high) + (onSiteExtra(q)?.total ?? 0)}`
                         : ""}
                     </div>
+                    {onSiteExtra(q) && (
+                      <div className="text-xs text-neutral-400 mt-1">
+                        Includes on-site: ${onSiteExtra(q)!.callout} callout · ${onSiteExtra(q)!.travel} travel · ${onSiteExtra(q)!.labour} labour
+                      </div>
+                    )}
                     {q.lead_time_days != null && (
                       <div className="text-sm text-neutral-500 mt-1">
                         ~{q.lead_time_days} day

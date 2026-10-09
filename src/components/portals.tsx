@@ -9,7 +9,7 @@ import { PricingAdmin } from "./PricingAdmin";
 import { AdminSuppliers } from "./AdminSuppliers";
 import { SupplierAudits } from "./audits/SupplierAudits";
 
-export function SupplierPortal({ supplier, authUserId, onLogout, requests, quotes, connections, pricing, onSavePricing, onSubmitManualQuote, onUnlock, onConfirmQuote, onRejectQuote, onUpdateFieldService, onMarkComplete }: any) {
+export function SupplierPortal({ supplier, authUserId, onLogout, requests, quotes, connections, pricing, onSavePricing, onSubmitManualQuote, onUnlock, onConfirmQuote, onRejectQuote, onUpdateFieldService, onMarkComplete, onReload }: any) {
   const [tab, setTab] = useState("jobs");
   const [jobType, setJobType] = useState("quotes"); // "quotes" = hose assembly, "field" = field service jobs
   const [stage, setStage] = useState("new");
@@ -142,7 +142,7 @@ export function SupplierPortal({ supplier, authUserId, onLogout, requests, quote
         </div>
       )}
 
-      {tab === "audits" && <SupplierAudits supplierId={supplier.id} userId={authUserId} pricing={pricing} />}
+      {tab === "audits" && <SupplierAudits supplierId={supplier.id} userId={authUserId} pricing={pricing} onQuoteCreated={onReload} />}
 
       {tab === "pricing" && <PricingAdmin pricing={pricing} onSave={onSavePricing} />}
     </div>
@@ -151,7 +151,7 @@ export function SupplierPortal({ supplier, authUserId, onLogout, requests, quote
 
 export function AdminPortal({
   authUserId, onLogout, suppliers, pricingBySupplier, requests, quotes, connections,
-  onSavePricing, onSubmitManualQuote, onUnlock, onConfirmQuote, onRejectQuote, onUpdateFieldService, onMarkComplete, onEditQuote,
+  onSavePricing, onSubmitManualQuote, onUnlock, onConfirmQuote, onRejectQuote, onUpdateFieldService, onMarkComplete, onEditQuote, onReload,
   onAddSupplier, onUpdateSupplier, onDeleteSupplier,
 }: any) {
   const [tab, setTab] = useState("jobs");
@@ -206,7 +206,7 @@ export function AdminPortal({
       </div>
 
       {tab === "audits" && (
-        <SupplierAudits userId={authUserId} suppliers={suppliers} pricingBySupplier={pricingBySupplier} />
+        <SupplierAudits userId={authUserId} suppliers={suppliers} pricingBySupplier={pricingBySupplier} onQuoteCreated={onReload} />
       )}
 
       {tab === "jobs" && (

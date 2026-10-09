@@ -242,3 +242,69 @@ export function fetchAuditReport(id: string, token: string): Promise<AuditReport
 export function sendAuditReport(id: string): Promise<{ sent: boolean; to: string }> {
   return invokeAuditReport({ action: "send", id });
 }
+
+// ---------- quote from audit (migration 0019) ----------
+
+export type AuditQuoteInput = {
+  itemIds: string[];
+  onSite: boolean;
+  hosesPrice: number;
+  leadTimeDays: number;
+  calloutFee: number;
+  travelCharge: number;
+  labourHours: number;
+  hourlyRate: number;
+  fulfillment: "pickup" | "delivery";
+  deliveryFee: number;
+  deliveryAddress: string;
+  notes: string;
+};
+
+// Creates the customer's request + a confirmed quote; the customer is
+// emailed and accepts it like any other quote.
+export async function createQuoteFromAudit(
+  auditId: string, q: AuditQuoteInput,
+): Promise<{ requestId: string; quoteId: string; accessToken: string }> {
+  const r = unwrap<{ request_id: string; quote_id: string; access_token: string }>(
+    await supabase.rpc("create_quote_from_audit", {
+      p_audit_id: auditId, p_item_ids: q.itemIds, p_on_site: q.onSite,
+      p_hoses_price: q.hosesPrice, p_lead_time_days: q.leadTimeDays,
+      p_callout_fee: q.calloutFee, p_travel_charge: q.travelCharge,
+      p_labour_hours: q.labourHours, p_hourly_rate: q.hourlyRate,
+      p_fulfillment: q.fulfillment, p_delivery_fee: q.deliveryFee,
+      p_delivery_address: q.deliveryAddress || null, p_notes: q.notes || null,
+    }),
+  );
+  return { requestId: r.request_id, quoteId: r.quote_id, accessToken: r.access_token };
+}
+
+export type AuditQuote = {
+  requestId: string;
+  accessToken: string;
+  createdAt: string;
+  onSite: boolean;
+  hoses: number;
+  status: string; // the quote's status
+  total: number;
+};
+
+// Quotes already made from an audit, newest first.
+export async function listAuditQuotes(auditId: string): Promise<AuditQuote[]> {
+  const rows = unwrap<Row[]>(
+    await supabase.from("requests")
+      .select("id, access_token, created_at, field_service_requested, assemblies, quotes(status, price_low, field_service)")
+      .eq("audit_id", auditId)
+      .order("created_at", { ascending: false }),
+  );
+  return rows.map((r) => {
+    const q = ((r.quotes as Row[]) || [])[0] || {};
+    const fs = (q.field_service as Record<string, unknown>) || {};
+    const onSite = Number(fs.calloutFee || 0) + Number(fs.travelCharge || 0) + Number(fs.labour || 0);
+    return {
+      requestId: str(r.id), accessToken: str(r.access_token), createdAt: str(r.created_at),
+      onSite: !!r.field_service_requested,
+      hoses: Array.isArray(r.assemblies) ? r.assemblies.length : 0,
+      status: str(q.status), total: Number(q.price_low || 0) + (fs.requested ? onSite : 0),
+    };
+  });
+}

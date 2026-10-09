@@ -8,6 +8,7 @@
 //   - requests / quotes / connections  -> invisible to anon (SELECT returns [])
 //   - machines / machine_hoses / service_log / hose_checks -> no anon access (0012, 0015)
 //   - audits / audit_items -> no anon access; anon can't call book_audit (0016)
+//     or create_quote_from_audit (0019)
 //   - suppliers / supplier_pricing     -> still world-readable (customer picker)
 //   - every table                      -> anon cannot INSERT / UPDATE
 //   - the sanctioned anon path (SECURITY DEFINER RPCs) still callable
@@ -305,6 +306,19 @@ if (realSupplier) {
     }),
   });
   check("anon cannot book a hose audit", !res.ok, `book_audit answered ${res.status} for anon`);
+}
+
+// --- 9. quotes can't be made from an audit anonymously (0019) ---------------
+{
+  const res = await api(`/rpc/create_quote_from_audit`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      p_audit_id: "00000000-0000-0000-0000-000000000000", p_item_ids: [],
+      p_on_site: false, p_hoses_price: 1, p_lead_time_days: 1,
+    }),
+  });
+  check("anon cannot create a quote from an audit", !res.ok, `create_quote_from_audit answered ${res.status} for anon`);
 }
 
 // --- verdict --------------------------------------------------------------

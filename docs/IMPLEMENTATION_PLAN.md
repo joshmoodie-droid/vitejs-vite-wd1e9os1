@@ -160,6 +160,12 @@ they have one.
   Edge Function, since the photo bucket has no anonymous reads), "Create quote
   from audit" (assemblies-only or on-site), audit-completed email, results
   written into the customer's register.
+  - **M4c-2 (0019)**: "Create quote from audit" — `create_quote_from_audit()`
+    makes the customer's request (`requests.audit_id`) and a confirmed quote
+    from the ticked hoses, priced as assemblies (pickup/delivery) or on-site
+    (callout + travel + labour hours × rate). Assemblies point at the
+    customer's register hoses (`machineHoseId`), and the completed-job
+    trigger now updates hoses across several machines.
 
 ## M5 — Reminders
 

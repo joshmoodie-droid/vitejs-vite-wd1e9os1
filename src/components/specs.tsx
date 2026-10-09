@@ -55,7 +55,9 @@ export function ManufacturingSpec({ r, compact }: any) {
     <div className={`bg-black/30 rounded-lg p-3 text-sm space-y-2 ${compact ? "mb-3" : "mb-3"}`}>
       {assemblies.map((a, idx) => (
         <div key={a.id || idx} className={idx > 0 ? "pt-2 border-t border-neutral-800" : ""}>
-          {assemblies.length > 1 && <div className="text-orange-500 text-xs font-bold mb-1">ASSEMBLY {idx + 1}</div>}
+          {(assemblies.length > 1 || a.label) && (
+            <div className="text-orange-500 text-xs font-bold mb-1">ASSEMBLY {idx + 1}{a.label && <span className="text-white font-semibold"> — {a.label}</span>}</div>
+          )}
           <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-neutral-300">
             <div><span className="text-neutral-500">Category:</span> {a.category === "hydraulic_oil" ? "Hydraulic Oil" : "Pressure Washer"}</div>
             <div><span className="text-neutral-500">Hose type:</span> {a.hoseType}</div>

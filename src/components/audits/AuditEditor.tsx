@@ -2,17 +2,18 @@
 // every audited hose grouped by machine, overall findings, and completion.
 
 import { Fragment, useEffect, useState } from "react";
-import { ArrowLeft, Pencil, Trash2, Plus, CheckCircle2, ExternalLink, Send, Link2 } from "lucide-react";
+import { ArrowLeft, Pencil, Trash2, Plus, CheckCircle2, ExternalLink, Send, Link2, FileText } from "lucide-react";
 import { Badge, Field, inputClass } from "../ui";
 import { PhotoStrip } from "../photos/PhotoStrip";
 import { AuditItemForm } from "./AuditItemForm";
+import { AuditQuoteForm } from "./AuditQuoteForm";
 import { conditionInfo } from "../../lib/checks";
 import { describeHoseSpec } from "../../lib/machines";
 import {
   AUDIT_STATUSES, auditStatusInfo, auditActionLabel, auditTotal, money,
   listAuditItems, createAuditItem, updateAuditItem, deleteAuditItem, updateAudit, emptyAuditItem,
-  sendAuditReport, auditReportPath,
-  type Audit, type AuditDraft, type AuditItem,
+  sendAuditReport, auditReportPath, listAuditQuotes,
+  type Audit, type AuditDraft, type AuditItem, type AuditQuote,
 } from "../../lib/audits";
 
 const DRAFT_KEYS: (keyof AuditDraft)[] = [
@@ -20,13 +21,20 @@ const DRAFT_KEYS: (keyof AuditDraft)[] = [
   "auditFee", "perMachineFee", "summary", "status",
 ];
 
+const QUOTE_STATUS: Record<string, string> = {
+  confirmed: "Sent — waiting for the customer", accepted: "Accepted", completed: "Completed",
+  rejected: "Withdrawn", declined: "Declined", pending: "Draft",
+};
+
 export function AuditEditor({
-  audit, userId, onBack, onUpdated,
+  audit, userId, pricing, onBack, onUpdated, onQuoteCreated,
 }: {
   audit: Audit;
   userId: string;
+  pricing?: Record<string, any>; // the audit supplier's pricing, for quote estimates
   onBack: () => void;
   onUpdated: (a: Audit) => void;
+  onQuoteCreated?: () => void; // e.g. reload the portal's jobs
 }) {
   const [items, setItems] = useState<AuditItem[] | null>(null);
   const [editing, setEditing] = useState<null | "new" | string>(null);
@@ -36,6 +44,17 @@ export function AuditEditor({
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
   const [reportNote, setReportNote] = useState("");
+  const [quotes, setQuotes] = useState<AuditQuote[]>([]);
+  const [quoting, setQuoting] = useState(false);
+  const [quoteNote, setQuoteNote] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    listAuditQuotes(audit.id)
+      .then((q) => { if (!cancelled) setQuotes(q); })
+      .catch(() => { /* the list is a convenience; the quotes are in the Jobs tab too */ });
+    return () => { cancelled = true; };
+  }, [audit.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -97,6 +116,25 @@ export function AuditEditor({
       setReportNote(reportUrl);
     }
   };
+
+  const quoteUrl = (q: AuditQuote) => `${window.location.origin}/r/${q.requestId}?t=${q.accessToken}`;
+  const copyQuoteLink = async (q: AuditQuote) => {
+    try {
+      await navigator.clipboard.writeText(quoteUrl(q));
+      setQuoteNote(`Quote link for ${q.requestId} copied.`);
+    } catch {
+      setQuoteNote(quoteUrl(q));
+    }
+  };
+  const quoteCreated = async (requestId: string) => {
+    setQuoting(false);
+    setQuoteNote(audit.customerEmail
+      ? `Quote ${requestId} sent to ${audit.customerEmail}. It's in your Jobs tab too.`
+      : `Quote ${requestId} created — copy its link below and send it to the customer.`);
+    onQuoteCreated?.();
+    try { setQuotes(await listAuditQuotes(audit.id)); } catch { /* shown on next open */ }
+  };
+  const canQuote = audit.status !== "cancelled" && (items?.length ?? 0) > 0;
 
   const setD = (patch: Partial<AuditDraft>) => setDraft((d) => ({ ...d, ...patch }));
   const sortItems = (list: AuditItem[]) =>
@@ -196,6 +234,45 @@ export function AuditEditor({
             </button>
           </div>
           {reportNote && <p className="text-sm text-neutral-300 mt-3 break-all">{reportNote}</p>}
+        </div>
+      )}
+
+      {quoting && items ? (
+        <AuditQuoteForm audit={audit} items={items} pricing={pricing} onCancel={() => setQuoting(false)} onCreated={quoteCreated} />
+      ) : (canQuote || quotes.length > 0) && (
+        <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5 mb-6">
+          <div className="flex items-center justify-between gap-3 mb-1">
+            <div className="text-white font-bold">Quotes from this audit</div>
+            {canQuote && (
+              <button onClick={() => { setQuoting(true); setQuoteNote(""); }} className="flex items-center gap-1.5 bg-orange-500 hover:bg-orange-600 text-black font-bold text-sm px-3 py-2 rounded-lg shrink-0">
+                <FileText className="w-3.5 h-3.5" /> Create quote
+              </button>
+            )}
+          </div>
+          {quotes.length === 0 ? (
+            <p className="text-sm text-neutral-400">
+              {replaceCount > 0
+                ? `Quote the ${replaceCount} hose${replaceCount === 1 ? "" : "s"} you recommended replacing — as assemblies or with on-site installation.`
+                : "Quote any of the audited hoses — as assemblies or with on-site installation."}
+            </p>
+          ) : (
+            <div className="space-y-2 mt-2">
+              {quotes.map((q) => (
+                <div key={q.requestId} className="bg-black/30 rounded-lg px-3 py-2 flex flex-wrap items-center justify-between gap-2 text-sm">
+                  <div className="min-w-0">
+                    <span className="font-mono text-orange-400">{q.requestId}</span>
+                    <span className="text-neutral-400"> · {q.hoses} hose{q.hoses === 1 ? "" : "s"}{q.onSite ? " · on-site" : ""} · {money(q.total)}</span>
+                    <div className="text-xs text-neutral-500">{QUOTE_STATUS[q.status] ?? q.status}</div>
+                  </div>
+                  <div className="flex gap-2">
+                    <a href={`/r/${q.requestId}?t=${q.accessToken}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-neutral-300 hover:text-white font-semibold"><ExternalLink className="w-3.5 h-3.5" /> View</a>
+                    <button onClick={() => copyQuoteLink(q)} className="flex items-center gap-1 text-neutral-300 hover:text-white font-semibold"><Link2 className="w-3.5 h-3.5" /> Copy link</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {quoteNote && <p className="text-sm text-neutral-300 mt-3 break-all">{quoteNote}</p>}
         </div>
       )}
 
