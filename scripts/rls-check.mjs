@@ -10,6 +10,7 @@
 //   - suppliers / supplier_pricing     -> still world-readable (customer picker)
 //   - every table                      -> anon cannot INSERT / UPDATE
 //   - the sanctioned anon path (SECURITY DEFINER RPCs) still callable
+//   - create_request rejects a machine_id the caller doesn't own (0013)
 //
 // Run: `npm run test:rls`. Needs VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY
 // (from the environment, or a local .env). Read-only apart from writes that RLS
@@ -226,6 +227,36 @@ if (realSupplier) {
     "anon can still call get_request_by_token RPC",
     res.status === 200,
     `expected 200 (no-match is fine) — got ${res.status}`,
+  );
+}
+
+// --- 6. create_request refuses a machine the caller doesn't own (0013) -------
+// anon owns no machines, so any machine_id must be rejected. If the guard ever
+// regresses this writes one junk request row (staging only) and fails loudly.
+{
+  const res = await api(`/rpc/create_request`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      r: {
+        id: `${marker}-machine`,
+        request_type: "quote",
+        status: "open",
+        fulfillment: "pickup",
+        machine_id: "00000000-0000-0000-0000-000000000000",
+      },
+    }),
+  });
+  let body = null;
+  try {
+    body = await res.json();
+  } catch {
+    /* non-JSON */
+  }
+  check(
+    "anon cannot link a request to a machine",
+    !res.ok && /another customer's machine/.test(body?.message ?? ""),
+    `expected the ownership error — got ${res.status}, ${JSON.stringify(body)?.slice(0, 160)}`,
   );
 }
 

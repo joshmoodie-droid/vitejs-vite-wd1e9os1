@@ -7,6 +7,9 @@ export type Route =
   | { name: "request"; requestId: string; token: string | null }
   // Supplier email links open the app on the supplier side: /supplier
   | { name: "supplier" }
+  // Customer email links straight to their maintenance register / requests
+  | { name: "machines" }
+  | { name: "requests" }
   // Everything else is the main customer app.
   | { name: "home" };
 
@@ -20,6 +23,8 @@ export function matchRoute(pathname: string, search = ""): Route {
     };
   }
   if (/^\/supplier\/?$/.test(pathname)) return { name: "supplier" };
+  if (/^\/machines\/?$/.test(pathname)) return { name: "machines" };
+  if (/^\/requests\/?$/.test(pathname)) return { name: "requests" };
   return { name: "home" };
 }
 

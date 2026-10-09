@@ -6,9 +6,9 @@ import { useEffect, useState } from "react";
 import { Plus, Tractor, ChevronRight } from "lucide-react";
 import { MachineForm } from "./forms";
 import { MachineDetail } from "./MachineDetail";
-import { listMachines, createMachine, emptyMachine, type Machine } from "../../lib/machines";
+import { listMachines, createMachine, emptyMachine, type Machine, type QuotePrefill } from "../../lib/machines";
 
-export function MyMachines({ email }: { email?: string }) {
+export function MyMachines({ email, onQuote }: { email?: string; onQuote: (prefill: QuotePrefill) => void }) {
   const [machines, setMachines] = useState<Machine[] | null>(null);
   const [loadError, setLoadError] = useState("");
   const [adding, setAdding] = useState(false);
@@ -29,6 +29,7 @@ export function MyMachines({ email }: { email?: string }) {
     return (
       <MachineDetail
         machine={open}
+        onQuote={onQuote}
         onBack={() => setOpenId(null)}
         onUpdated={(m) => setMachines((ms) => (ms || []).map((x) => (x.id === m.id ? m : x)).sort(byName))}
         onDeleted={(id) => { setMachines((ms) => (ms || []).filter((x) => x.id !== id)); setOpenId(null); }}

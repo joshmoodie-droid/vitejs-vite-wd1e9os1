@@ -3,14 +3,14 @@
 // list stays in sync.
 
 import { Fragment, useEffect, useState, type ReactNode } from "react";
-import { ArrowLeft, Pencil, Trash2, Plus } from "lucide-react";
+import { ArrowLeft, Pencil, Trash2, Plus, RotateCcw, Send } from "lucide-react";
 import { MachineForm, HoseForm, LogForm } from "./forms";
 import {
   listHoses, createHose, updateHose, deleteHose,
   listLog, createLogEntry, updateLogEntry, deleteLogEntry,
   updateMachine, deleteMachine,
-  emptyHose, emptyLogEntry, describeHoseSpec, serviceKindLabel,
-  type Machine, type MachineHose, type ServiceLogEntry,
+  emptyHose, emptyLogEntry, describeHoseSpec, serviceKindLabel, assemblyFromHose,
+  type Machine, type MachineHose, type ServiceLogEntry, type QuotePrefill,
 } from "../../lib/machines";
 
 const formatDate = (iso: string) =>
@@ -21,9 +21,10 @@ type Tab = "hoses" | "log";
 type Editing = null | "new" | string;
 
 export function MachineDetail({
-  machine, onBack, onUpdated, onDeleted,
+  machine, onQuote, onBack, onUpdated, onDeleted,
 }: {
   machine: Machine;
+  onQuote: (prefill: QuotePrefill) => void;
   onBack: () => void;
   onUpdated: (m: Machine) => void;
   onDeleted: (id: string) => void;
@@ -91,6 +92,12 @@ export function MachineDetail({
           <h1 className="text-2xl font-extrabold text-white break-words">{machine.name}</h1>
           {details.length > 0 && <p className="text-neutral-400 text-sm mt-1">{details.join(" · ")}</p>}
           {machine.notes && <p className="text-neutral-500 text-sm mt-2 whitespace-pre-wrap">{machine.notes}</p>}
+          <button
+            onClick={() => onQuote({ machineId: machine.id })}
+            className="mt-3 flex items-center gap-2 border border-orange-500/60 text-orange-400 hover:bg-orange-500/10 font-semibold text-sm px-3 py-2 rounded-lg"
+          >
+            <Send className="w-3.5 h-3.5" /> Get a hose quote
+          </button>
         </div>
         <div className="flex gap-1 shrink-0">
           <button onClick={() => setEditingMachine(true)} title="Edit machine" aria-label="Edit machine" className="p-2 text-neutral-400 hover:text-white">
@@ -157,6 +164,7 @@ export function MachineDetail({
                   title={h.position}
                   subtitle={describeHoseSpec(h.spec)}
                   meta={[h.installedAt && `Fitted ${formatDate(h.installedAt)}`, h.notes].filter(Boolean).join(" · ")}
+                  action={{ label: "Order again", onClick: () => onQuote({ machineId: machine.id, assemblies: [assemblyFromHose(h)] }) }}
                   onEdit={() => setEditing(h.id)}
                   onDelete={() => confirmAndRun(`Remove “${h.position}” from the hose register?`, async () => {
                     await deleteHose(h.id);
@@ -251,14 +259,26 @@ function Section({
 }
 
 function Row({
-  title, subtitle, meta, onEdit, onDelete,
-}: { title: string; subtitle?: string; meta?: string; onEdit: () => void; onDelete: () => void }) {
+  title, subtitle, meta, action, onEdit, onDelete,
+}: {
+  title: string; subtitle?: string; meta?: string;
+  action?: { label: string; onClick: () => void };
+  onEdit: () => void; onDelete: () => void;
+}) {
   return (
     <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-4 flex items-start justify-between gap-3">
       <div className="min-w-0">
         <div className="text-white font-semibold break-words">{title}</div>
         {subtitle && <div className="text-sm text-neutral-400 mt-0.5 whitespace-pre-wrap break-words">{subtitle}</div>}
         {meta && <div className="text-xs text-neutral-500 mt-1 break-words">{meta}</div>}
+        {action && (
+          <button
+            onClick={action.onClick}
+            className="mt-2 flex items-center gap-1.5 text-orange-400 hover:text-orange-300 text-sm font-semibold"
+          >
+            <RotateCcw className="w-3.5 h-3.5" /> {action.label}
+          </button>
+        )}
       </div>
       <div className="flex gap-1 shrink-0">
         <button onClick={onEdit} title="Edit" aria-label="Edit" className="p-2 text-neutral-500 hover:text-white">

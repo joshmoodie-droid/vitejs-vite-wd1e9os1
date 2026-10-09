@@ -32,7 +32,11 @@ import { CustomerFlow, BookingFlow } from "./components/flows";
 // signed-in user. See SupplierAuth.
 
 // The supplier email links to /supplier — open straight on that side.
-const initialView = currentRoute().name === "supplier" ? "supplier" : "customer";
+const initialRoute = currentRoute().name;
+const initialView = initialRoute === "supplier" ? "supplier" : "customer";
+// Email links to /machines and /requests open those customer screens (they
+// fall back to sign-in when signed out).
+const initialCustomerView = initialRoute === "machines" ? "machines" : initialRoute === "requests" ? "mine" : "new";
 
 export default function HoseQuoteApp() {
   const [view, setView] = useState(initialView);
@@ -49,7 +53,7 @@ export default function HoseQuoteApp() {
   // ---- customer accounts (Phase 2) ----
   const [customer, setCustomer] = useState(null); // Supabase auth user
   const [profile, setProfile] = useState(null);
-  const [customerView, setCustomerView] = useState("new"); // "new" | "auth" | "mine" | "machines"
+  const [customerView, setCustomerView] = useState(initialCustomerView); // "new" | "auth" | "mine" | "machines"
 
   const [step, setStep] = useState(1);
   const [form, setForm] = useState(emptyForm());
@@ -252,6 +256,7 @@ export default function HoseQuoteApp() {
       delivery_notes: !form.fieldServiceRequested && form.fulfillment === "delivery" ? form.deliveryNotes : null,
       name: form.name, phone: form.phone, email: form.email, preferred_time: form.preferredTime,
       notes: form.notes, photo_url: form.photoUrl, assemblies: form.assemblies,
+      machine_id: customer && form.machineId ? form.machineId : null,
     };
     const { data: created } = await supabase.rpc("create_request", { r: row });
     const record = requestFromRow({ ...row, ...(created ?? { created_at: new Date().toISOString() }) });
@@ -282,6 +287,24 @@ export default function HoseQuoteApp() {
   };
 
   const resetWizard = () => { setForm(emptyForm()); setStep(1); setSubmittedRequestId(null); setErrors({}); setFlowType(null); };
+
+  // "Order again" / "Get a quote" from the maintenance register or a past
+  // request: open the quote wizard with `prefill` (lib/machines QuotePrefill)
+  // over a blank form. Contact details come from the profile as usual.
+  const startPrefilledQuote = (prefill) => {
+    setForm({
+      ...emptyForm(),
+      name: profile?.full_name || "",
+      phone: profile?.phone || "",
+      email: profile?.email || customer?.email || "",
+      ...prefill,
+    });
+    setStep(1);
+    setErrors({});
+    setSubmittedRequestId(null);
+    setFlowType("quote");
+    window.scrollTo(0, 0);
+  };
 
   const confirmQuote = async (quoteId, overrides) => {
     const row = {};
@@ -524,6 +547,8 @@ export default function HoseQuoteApp() {
               customerId={customer.id}
               email={customer.email}
               onNew={() => setCustomerView("new")}
+              onOrderAgain={startPrefilledQuote}
+              onMachines={() => setCustomerView("machines")}
             />
           ) : (
             <CustomerAuth
@@ -534,7 +559,7 @@ export default function HoseQuoteApp() {
         )}
         {view === "customer" && flowType === null && customerView === "machines" && (
           customer ? (
-            <MyMachines email={customer.email} />
+            <MyMachines email={customer.email} onQuote={startPrefilledQuote} />
           ) : (
             <CustomerAuth
               onSignedIn={() => setCustomerView("machines")}
@@ -552,6 +577,7 @@ export default function HoseQuoteApp() {
             quotes={quotes} acceptQuote={acceptQuote}
             requestFieldService={requestFieldService} confirmFieldService={confirmFieldService}
             onBack={() => setFlowType(null)}
+            customer={customer}
           />
         )}
         {view === "customer" && flowType === "booking" && (

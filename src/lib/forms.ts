@@ -15,6 +15,8 @@ export function emptyForm() {
     fieldServiceRequested: false, siteAddress: "", accessNotes: "", fsLabourHoursEstimate: "",
     fulfillment: "pickup", deliveryAddress: "", deliveryNotes: "",
     name: "", phone: "", email: "", preferredTime: "", notes: "", photoUrl: "",
+    // Maintenance register: which of the signed-in customer's machines this is for.
+    machineId: "",
   };
 }
 

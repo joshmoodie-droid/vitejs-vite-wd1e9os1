@@ -230,12 +230,20 @@ async function onQuoteStatusChange(quote: any, oldStatus: string) {
             ? ` It's being sent to ${req.delivery_address || "your address"}.`
             : ` It's ready to collect${supplier?.company_name ? ` from <b>${supplier.company_name}</b>` : ""}.`)
         : "";
+      // Maintenance register: jobs linked to a machine were written into it by
+      // the quotes_completed_to_register trigger; signed-in customers can
+      // still save an unlinked hose job to one of their machines.
+      const registerLine = req.machine_id
+        ? `<p>We've added this job to your machine's service history and hose register — <a href="${APP_URL}/machines">view your machines</a>.</p>`
+        : req.customer_id && !quote.is_booking
+          ? `<p>Keep a record for next time: <a href="${APP_URL}/requests">save these hoses to one of your machines</a> so you can re-order them in one tap.</p>`
+          : "";
       await sendEmail(
         req.email,
         `Job complete — ${req.id}`,
         shell(
           "Your job is marked complete",
-          `${supplier?.company_name ? `<b>${supplier.company_name}</b> has` : "The supplier has"} marked <b>${req.id}</b> complete.${fulfillmentLine} Thanks for using HoseQuote.`,
+          `${supplier?.company_name ? `<b>${supplier.company_name}</b> has` : "The supplier has"} marked <b>${req.id}</b> complete.${fulfillmentLine} Thanks for using HoseQuote.${registerLine}`,
           { label: "View summary", url: customerLink(req) },
         ),
       );
