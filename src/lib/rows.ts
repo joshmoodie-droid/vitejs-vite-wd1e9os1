@@ -13,7 +13,7 @@ export function requestFromRow(r) {
     urgency: r.urgency, location: r.location, fieldServiceRequested: r.field_service_requested,
     siteAddress: r.site_address, accessNotes: r.access_notes, fsLabourHoursEstimate: r.fs_labour_hours_estimate,
     fulfillment: r.fulfillment, deliveryAddress: r.delivery_address, deliveryNotes: r.delivery_notes,
-    name: r.name, phone: r.phone, email: r.email, preferredTime: r.preferred_time, notes: r.notes, photoUrl: r.photo_url,
+    name: r.name, phone: r.phone, email: r.email, preferredTime: r.preferred_time, notes: r.notes, photoUrl: r.photo_url, photos: r.photos || [],
     assemblies: r.assemblies || [], equipmentType: r.equipment_type, issue: r.issue, description: r.description,
     labourHoursEstimate: r.labour_hours_estimate, createdAt: r.created_at,
   };

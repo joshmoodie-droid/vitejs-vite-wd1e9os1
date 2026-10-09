@@ -17,6 +17,8 @@ export function emptyForm() {
     name: "", phone: "", email: "", preferredTime: "", notes: "", photoUrl: "",
     // Maintenance register: which of the signed-in customer's machines this is for.
     machineId: "",
+    // Storage paths of uploaded photos (signed-in customers; see lib/photos).
+    photos: [],
   };
 }
 
@@ -24,6 +26,6 @@ export function emptyBookingForm() {
   return {
     equipmentType: "", issue: "", description: "", labourHoursEstimate: "",
     urgency: "standard", location: "", selectedSupplierId: "",
-    name: "", phone: "", email: "", preferredTime: "", notes: "", photoUrl: "",
+    name: "", phone: "", email: "", preferredTime: "", notes: "", photoUrl: "", photos: [],
   };
 }

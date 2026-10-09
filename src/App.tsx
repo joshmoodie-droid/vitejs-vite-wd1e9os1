@@ -257,6 +257,7 @@ export default function HoseQuoteApp() {
       name: form.name, phone: form.phone, email: form.email, preferred_time: form.preferredTime,
       notes: form.notes, photo_url: form.photoUrl, assemblies: form.assemblies,
       machine_id: customer && form.machineId ? form.machineId : null,
+      photos: customer && form.photos?.length ? form.photos : null,
     };
     const { data: created } = await supabase.rpc("create_request", { r: row });
     const record = requestFromRow({ ...row, ...(created ?? { created_at: new Date().toISOString() }) });
@@ -582,6 +583,7 @@ export default function HoseQuoteApp() {
         )}
         {view === "customer" && flowType === "booking" && (
           <BookingFlow
+            customer={customer}
             suppliers={suppliers} pricingBySupplier={pricingBySupplier}
             quotes={quotes}
             onSubmitBooking={async (record, newQuote) => {
@@ -591,6 +593,7 @@ export default function HoseQuoteApp() {
                 urgency: record.urgency, selected_supplier_id: record.selectedSupplierId,
                 name: record.name, phone: record.phone, email: record.email, preferred_time: record.preferredTime,
                 notes: record.notes, photo_url: record.photoUrl, equipment_type: record.equipmentType,
+                photos: customer && record.photos?.length ? record.photos : null,
                 issue: record.issue, description: record.description, labour_hours_estimate: record.labourHoursEstimate,
               };
               const { data: createdReq } = await supabase.rpc("create_request", { r: row });

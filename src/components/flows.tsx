@@ -12,6 +12,7 @@ import { Field, inputClass, StepDot, SectionTitle, Badge } from "./ui";
 import { AssemblyCard } from "./AssemblyCard";
 import { FieldServiceSection } from "./FieldServiceSection";
 import { MachinePicker } from "./machines/MachinePicker";
+import { PhotoUploader } from "./photos/PhotoUploader";
 
 export function CustomerFlow({ form, update, errors, step, next, back, submit, updateAssembly, addAssembly, removeAssembly, suppliers, pricingBySupplier, submittedRequestId, resetWizard, quotes, acceptQuote, requestFieldService, confirmFieldService, onBack, customer }: any) {
   // The on-site toggle reveals the site-address fields directly below it —
@@ -309,9 +310,18 @@ export function CustomerFlow({ form, update, errors, step, next, back, submit, u
             <Field label="Notes (optional)" hint="Any extra details about the job, access, timing, etc.">
               <textarea rows={3} placeholder="e.g. Hose is on an excavator, need mobile service on site." className={inputClass()} value={form.notes} onChange={(e) => update("notes", e.target.value)} />
             </Field>
-            <Field label="Photo URL (optional)" hint="Link to a photo of the hose or fitting if available">
-              <input placeholder="https://..." className={inputClass()} value={form.photoUrl} onChange={(e) => update("photoUrl", e.target.value)} />
-            </Field>
+            {customer ? (
+              <Field label="Photos (optional)">
+                <PhotoUploader
+                  userId={customer.id} value={form.photos || []} onChange={(p) => update("photos", p)}
+                  hint="The worn hose, both fittings, and any printing on the hose help suppliers quote accurately."
+                />
+              </Field>
+            ) : (
+              <Field label="Photo URL (optional)" hint="Link to a photo of the hose or fitting if available. Sign in to attach photos straight from your phone.">
+                <input placeholder="https://..." className={inputClass()} value={form.photoUrl} onChange={(e) => update("photoUrl", e.target.value)} />
+              </Field>
+            )}
           </>
         )}
       </div>
@@ -399,7 +409,7 @@ export function CustomerFlow({ form, update, errors, step, next, back, submit, u
   );
 }
 
-export function BookingFlow({ suppliers, pricingBySupplier, quotes, onSubmitBooking, acceptQuote, onBack, step, setStep, form, setForm, errors, setErrors, submittedRequestId, setSubmittedRequestId }: any) {
+export function BookingFlow({ customer, suppliers, pricingBySupplier, quotes, onSubmitBooking, acceptQuote, onBack, step, setStep, form, setForm, errors, setErrors, submittedRequestId, setSubmittedRequestId }: any) {
   const update = (key, value) => setForm((f) => ({ ...f, [key]: value }));
 
   const previewQuotes = suppliers
@@ -640,9 +650,18 @@ export function BookingFlow({ suppliers, pricingBySupplier, quotes, onSubmitBook
             <Field label="Notes (optional)" hint="Site access, gate codes, parking, etc.">
               <textarea rows={3} className={inputClass()} value={form.notes} onChange={(e) => update("notes", e.target.value)} />
             </Field>
-            <Field label="Photo URL (optional)" hint="Link to a photo of the issue if available">
-              <input placeholder="https://..." className={inputClass()} value={form.photoUrl} onChange={(e) => update("photoUrl", e.target.value)} />
-            </Field>
+            {customer ? (
+              <Field label="Photos (optional)">
+                <PhotoUploader
+                  userId={customer.id} value={form.photos || []} onChange={(p) => update("photos", p)}
+                  hint="Photos of the problem help the technician come prepared."
+                />
+              </Field>
+            ) : (
+              <Field label="Photo URL (optional)" hint="Link to a photo of the issue if available. Sign in to attach photos straight from your phone.">
+                <input placeholder="https://..." className={inputClass()} value={form.photoUrl} onChange={(e) => update("photoUrl", e.target.value)} />
+              </Field>
+            )}
           </>
         )}
       </div>
