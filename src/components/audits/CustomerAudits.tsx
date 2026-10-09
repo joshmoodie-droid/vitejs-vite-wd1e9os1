@@ -1,10 +1,10 @@
-// The signed-in customer's hose audits, shown on My requests. Status and fee
-// for now; the full report (photos, recommendations) arrives with M4c.
+// The signed-in customer's hose audits, shown on My requests, with a link to
+// the full report (photos, recommendations) once the audit is complete.
 
 import { useEffect, useState } from "react";
 import { ClipboardCheck } from "lucide-react";
 import { Badge } from "../ui";
-import { listAudits, auditStatusInfo, auditTotal, money, type Audit } from "../../lib/audits";
+import { listAudits, auditStatusInfo, auditTotal, money, auditReportPath, type Audit } from "../../lib/audits";
 
 export function CustomerAudits({ customerId }: { customerId: string }) {
   const [audits, setAudits] = useState<Audit[]>([]);
@@ -41,6 +41,11 @@ export function CustomerAudits({ customerId }: { customerId: string }) {
                 ].filter(Boolean).join(" · ")}
               </div>
               {a.status === "completed" && a.summary && <p className="text-sm text-neutral-300 mt-2">{a.summary}</p>}
+              {a.status === "completed" && (
+                <a href={auditReportPath(a)} className="inline-block mt-3 text-orange-400 hover:text-orange-300 text-sm font-semibold">
+                  View report — photos and recommendations →
+                </a>
+              )}
             </div>
           );
         })}

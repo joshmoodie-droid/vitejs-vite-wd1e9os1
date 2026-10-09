@@ -4,3 +4,8 @@ project_id = "qwycavfmdpknnflxlylw"
 
 [functions.notify]
 verify_jwt = false
+
+# Called from the app: "view" is anonymous (the audit's access token is the
+# key) and "send" checks the caller's token itself.
+[functions.audit-report]
+verify_jwt = false

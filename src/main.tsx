@@ -4,6 +4,7 @@ import * as Sentry from '@sentry/react'
 import './index.css'
 import App from './App.tsx'
 import RequestStatus from './RequestStatus.tsx'
+import AuditReport from './components/audits/AuditReport.tsx'
 import { currentRoute } from './lib/routes.ts'
 
 // Error monitoring. No-op unless VITE_SENTRY_DSN is set (so local dev and CI
@@ -53,6 +54,8 @@ root.render(
     >
       {route.name === 'request' ? (
         <RequestStatus requestId={route.requestId} token={route.token} />
+      ) : route.name === 'audit' ? (
+        <AuditReport auditId={route.auditId} token={route.token} />
       ) : (
         <App />
       )}
