@@ -1,9 +1,9 @@
 // The "What do you need?" landing screen — pick quote vs. field-service.
 // Stateless. Extracted verbatim from App.tsx.
 
-import { Droplet, Wrench, Truck } from "lucide-react";
+import { Droplet, Wrench, Truck, Tractor } from "lucide-react";
 
-export function FlowChooser({ onChoose, customer, onSignIn, onMine }) {
+export function FlowChooser({ onChoose, customer, onSignIn, onMine, onMachines }) {
   return (
     <div>
       <div className="text-center mb-8">
@@ -37,6 +37,20 @@ export function FlowChooser({ onChoose, customer, onSignIn, onMine }) {
           </div>
           <div className="text-white font-bold text-lg mb-1 group-hover:text-orange-500 transition-colors">Book a Field Service Job</div>
           <p className="text-neutral-500 text-sm">Not sure of the exact hose spec yet? Book a technician to come assess and fix it on site — describe the job and get indicative callout pricing.</p>
+        </button>
+
+        <button
+          type="button"
+          onClick={onMachines}
+          className="w-full text-left bg-neutral-900/50 border border-neutral-800 hover:border-orange-500 rounded-xl p-5 transition-colors group flex items-center gap-4"
+        >
+          <div className="w-10 h-10 rounded-lg bg-orange-500/10 border border-orange-500/40 flex items-center justify-center shrink-0">
+            <Tractor className="w-5 h-5 text-orange-500" />
+          </div>
+          <div>
+            <div className="text-white font-bold mb-0.5 group-hover:text-orange-500 transition-colors">My Machines — Maintenance Register</div>
+            <p className="text-neutral-500 text-sm">Free: record each machine's hoses and service history in one place.{customer ? "" : " Sign in to start."}</p>
+          </div>
         </button>
       </div>
 

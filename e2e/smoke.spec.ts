@@ -41,6 +41,17 @@ test("booking wizard opens", async ({ page }) => {
   await expect(page.getByText(/Step 1 of 3/)).toBeVisible();
 });
 
+test("maintenance register asks a signed-out visitor to sign in", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: /My Machines — Maintenance Register/ })
+    .click();
+  await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+  await expect(page.getByPlaceholder("you@example.com")).toBeVisible();
+});
+
 test("/supplier shows the supplier sign-in", async ({ page }) => {
   await page.goto("/supplier");
   await expect(
