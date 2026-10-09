@@ -38,6 +38,9 @@ The build plan is [`docs/IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md)
 | #66 | M4c-2 | **Quote from an audit** — supplier ticks the hoses to replace, quotes hose assemblies only (pickup/delivery) or on-site installation (callout, travel, labour); customer accepts as normal; completing the job updates every machine's register |
 | #67 | M6 + fix | **Commission tracking** — HoseQuote's fee per job (default 8%, min $5, max $50), admin Commission tab (monthly totals, CSV export, mark invoiced, waive, supplier rates), fee shown to suppliers. Plus: machine log shows the full job price including on-site costs |
 | #68 | — | Home screen: My Machines card matches the other cards; demo-reset scripts saved |
+| #69 | — | This session summary |
+| #70 | — | **Phone navigation** — on phones the header is just the logo and a labelled bottom tab bar (Home · Machines · Requests · Account, plus Supplier for suppliers/admins) replaces the row of small icons; new Account page (signed-in email, Supplier portal, Sign out). Laptop/desktop unchanged |
+| #71 | — | Hose audit wording — the supplier "checks the hoses, photographs any of concern, and recommends" what to replace (no longer promises every hose) |
 
 ## 3. Database changes (all applied to staging and production)
 
