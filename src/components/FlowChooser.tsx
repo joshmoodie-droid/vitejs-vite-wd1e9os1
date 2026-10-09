@@ -48,7 +48,7 @@ export function FlowChooser({ onChoose, customer, onSignIn, onMine, onMachines }
             <ClipboardCheck className="w-6 h-6 text-orange-500" />
           </div>
           <div className="text-white font-bold text-lg mb-1 group-hover:text-orange-500 transition-colors">Book a Hose Audit</div>
-          <p className="text-neutral-500 text-sm">A supplier inspects and photographs every hose on your machines and tells you what to replace now, what can wait, and what's fine.</p>
+          <p className="text-neutral-500 text-sm">A supplier checks the hoses on your machines, photographs any of concern, and recommends what to replace now and what can wait.</p>
         </button>
 
         <button
