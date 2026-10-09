@@ -295,6 +295,9 @@ export type QuotePrefill = {
   selectedSupplierId?: string;
   fulfillment?: string;
   deliveryAddress?: string;
+  photos?: string[];
+  urgency?: string;
+  notes?: string;
 };
 
 // A saved hose as a quote-form assembly. machineHoseId lets the completion

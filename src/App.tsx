@@ -560,7 +560,7 @@ export default function HoseQuoteApp() {
         )}
         {view === "customer" && flowType === null && customerView === "machines" && (
           customer ? (
-            <MyMachines email={customer.email} onQuote={startPrefilledQuote} />
+            <MyMachines userId={customer.id} email={customer.email} onQuote={startPrefilledQuote} />
           ) : (
             <CustomerAuth
               onSignedIn={() => setCustomerView("machines")}

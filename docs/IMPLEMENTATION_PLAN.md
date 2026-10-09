@@ -142,6 +142,25 @@ Builds on M1 + M3.
 **Done when** a customer can do a weekly walk-round in a couple of minutes and
 turn a worn hose into a quote request without re-typing anything.
 
+### M4b/M4c — Supplier hose audits (agreed 2026-10-09)
+
+Decisions: audits start **both** ways (customer books in the app; supplier
+creates one for any customer by name + email); **flat audit fee** (plus
+optional per-machine fee) in supplier pricing, paid to the supplier directly
+for now; the **supplier builds a quote from the audit** — hose assemblies only
+or with on-site installation (callout + labour) — which the customer accepts
+through the normal quote flow; results go to an **emailed report link** that
+works without an account, and into the customer's **maintenance register** if
+they have one.
+
+- **M4b** — schema (`audits`, `audit_items`: machine, hose position, spec,
+  condition, photos, recommendation, action), audit fee in supplier pricing,
+  "Book a hose audit" for customers, supplier portal to create/perform audits.
+- **M4c** — tokenised report page `/a/:id?t=…` (photos via a token-checked
+  Edge Function, since the photo bucket has no anonymous reads), "Create quote
+  from audit" (assemblies-only or on-site), audit-completed email, results
+  written into the customer's register.
+
 ## M5 — Reminders
 
 - **Schema — `0016_reminders.sql`**: `reminders (id, customer_id, machine_id,
