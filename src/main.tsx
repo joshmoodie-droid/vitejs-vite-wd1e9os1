@@ -4,6 +4,7 @@ import * as Sentry from '@sentry/react'
 import './index.css'
 import App from './App.tsx'
 import RequestStatus from './RequestStatus.tsx'
+import { currentRoute } from './lib/routes.ts'
 
 // Error monitoring. No-op unless VITE_SENTRY_DSN is set (so local dev and CI
 // stay quiet); in Vercel it's a project env var. The DSN is a write-only
@@ -22,9 +23,9 @@ if (dsn) {
 
 const root = createRoot(document.getElementById('root')!)
 
-// Minimal path-based routing. Email links point at /r/:requestId?t=:token
-// and open a read-only status view; everything else is the main app.
-const match = window.location.pathname.match(/^\/r\/([^/]+)\/?$/)
+// Email links to /r/:requestId?t=:token open a read-only status view;
+// everything else is the main app. Routes live in lib/routes.ts.
+const route = currentRoute()
 
 root.render(
   <StrictMode>
@@ -50,11 +51,8 @@ root.render(
         </div>
       }
     >
-      {match ? (
-        <RequestStatus
-          requestId={decodeURIComponent(match[1])}
-          token={new URLSearchParams(window.location.search).get('t')}
-        />
+      {route.name === 'request' ? (
+        <RequestStatus requestId={route.requestId} token={route.token} />
       ) : (
         <App />
       )}

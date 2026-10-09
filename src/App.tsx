@@ -11,6 +11,7 @@ import { defaultPricing, calcEstimate, combinedTotal, calcBookingEstimate } from
 import { emptyAssembly, emptyForm, emptyBookingForm } from "./lib/forms";
 import { supplierFromRow, pricingFromRow, requestFromRow, quoteFromRow, connectionFromRow } from "./lib/rows";
 import { areasMatch, slugify } from "./lib/util";
+import { currentRoute } from "./lib/routes";
 import { Field, inputClass, StepDot, SectionTitle, Badge } from "./components/ui";
 import { BookingSpec, AssemblyPriceBreakdown, ManufacturingSpec } from "./components/specs";
 import { AssemblyCard } from "./components/AssemblyCard";
@@ -30,10 +31,7 @@ import { CustomerFlow, BookingFlow } from "./components/flows";
 // signed-in user. See SupplierAuth.
 
 // The supplier email links to /supplier — open straight on that side.
-const initialView =
-  typeof window !== "undefined" && /^\/supplier\/?$/.test(window.location.pathname)
-    ? "supplier"
-    : "customer";
+const initialView = currentRoute().name === "supplier" ? "supplier" : "customer";
 
 export default function HoseQuoteApp() {
   const [view, setView] = useState(initialView);
