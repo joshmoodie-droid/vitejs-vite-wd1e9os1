@@ -11,8 +11,9 @@ import { URGENCY, EQUIPMENT_TYPES, JOB_ISSUES } from "../lib/catalog";
 import { Field, inputClass, StepDot, SectionTitle, Badge } from "./ui";
 import { AssemblyCard } from "./AssemblyCard";
 import { FieldServiceSection } from "./FieldServiceSection";
+import { MachinePicker } from "./machines/MachinePicker";
 
-export function CustomerFlow({ form, update, errors, step, next, back, submit, updateAssembly, addAssembly, removeAssembly, suppliers, pricingBySupplier, submittedRequestId, resetWizard, quotes, acceptQuote, requestFieldService, confirmFieldService, onBack }: any) {
+export function CustomerFlow({ form, update, errors, step, next, back, submit, updateAssembly, addAssembly, removeAssembly, suppliers, pricingBySupplier, submittedRequestId, resetWizard, quotes, acceptQuote, requestFieldService, confirmFieldService, onBack, customer }: any) {
   // The on-site toggle reveals the site-address fields directly below it —
   // with no scroll or transition, that reveal is easy to miss if the toggle
   // is near the bottom of the viewport (it read as "clicking it doesn't do
@@ -181,6 +182,7 @@ export function CustomerFlow({ form, update, errors, step, next, back, submit, u
       <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 mb-6">
         {step === 1 && (
           <>
+            {customer && <MachinePicker value={form.machineId || ""} onChange={(v) => update("machineId", v)} />}
             <SectionTitle icon={Wrench} title="Hose Assemblies" subtitle="Add each hose you need — you can request several in one quote." />
             <div className="space-y-4 mb-4">
               {form.assemblies.map((a, idx) => (

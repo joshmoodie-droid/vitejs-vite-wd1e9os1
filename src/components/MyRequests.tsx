@@ -1,28 +1,50 @@
-// The signed-in customer's "My requests" dashboard. Extracted verbatim from
-// App.tsx. Loads the customer's own requests from Supabase and links each to
-// its /r/:id status page. MY_REQ_STATUS is used only here.
+// The signed-in customer's "My requests" dashboard. Loads the customer's own
+// requests from Supabase and links each to its /r/:id status page. Quote
+// requests can be re-ordered, and accepted jobs not yet in the maintenance
+// register can be saved to a machine. MY_REQ_STATUS is used only here.
 
 import { useState, useEffect } from "react";
-import { Plus } from "lucide-react";
+import { Plus, RotateCcw, Tractor } from "lucide-react";
 import { supabase } from "../supabaseClient";
 import { Badge } from "./ui";
+import { SaveToMachine } from "./machines/SaveToMachine";
+import { assembliesFromRequest, listSavedRequestIds, type QuotePrefill } from "../lib/machines";
 
 const MY_REQ_STATUS = {
   open: { label: "Awaiting quote", tone: "neutral" },
   accepted: { label: "Accepted", tone: "orange" },
 };
 
-export function MyRequests({ customerId, email, onNew }: any) {
+export function MyRequests({ customerId, email, onNew, onOrderAgain, onMachines }: any) {
   const [rows, setRows] = useState(null);
+  // request ids whose hoses are already in the register (linked at request
+  // time, or saved here)
+  const [inRegister, setInRegister] = useState(new Set());
+  const [savingId, setSavingId] = useState(null);
+  const [savedMessage, setSavedMessage] = useState("");
 
   useEffect(() => {
     supabase
       .from("requests")
-      .select("id, request_type, status, location, created_at, access_token")
+      .select("id, request_type, status, location, created_at, access_token, assemblies, machine_id, selected_supplier_id, fulfillment, delivery_address")
       .eq("customer_id", customerId)
       .order("created_at", { ascending: false })
       .then(({ data }) => setRows(data || []));
+    // Only drives whether "Save to a machine" is offered — fail quiet.
+    listSavedRequestIds().then(setInRegister).catch(() => {});
   }, [customerId]);
+
+  const orderAgain = (r) => {
+    const prefill: QuotePrefill = {
+      assemblies: assembliesFromRequest(r.assemblies),
+      machineId: r.machine_id || "",
+      location: r.location || "",
+      selectedSupplierId: r.selected_supplier_id || "",
+      fulfillment: r.fulfillment || "pickup",
+      deliveryAddress: r.delivery_address || "",
+    };
+    onOrderAgain(prefill);
+  };
 
   return (
     <div>
@@ -41,6 +63,12 @@ export function MyRequests({ customerId, email, onNew }: any) {
 
       {rows === null && <p className="text-neutral-500">Loading…</p>}
 
+      {savedMessage && (
+        <div className="mb-4 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
+          {savedMessage}
+        </div>
+      )}
+
       {rows !== null && rows.length === 0 && (
         <div className="text-center py-12 text-neutral-500 border border-dashed border-neutral-800 rounded-xl">
           Nothing here yet. Requests you submit while signed in — or any past
@@ -52,22 +80,58 @@ export function MyRequests({ customerId, email, onNew }: any) {
       <div className="space-y-3">
         {(rows || []).map((r) => {
           const meta = MY_REQ_STATUS[r.status] || { label: r.status, tone: "neutral" };
+          const isQuote = r.request_type !== "booking";
+          const registered = !!r.machine_id || inRegister.has(r.id);
+          const canSave = isQuote && r.status === "accepted" && !registered && (r.assemblies || []).length > 0;
           return (
-            <a
-              key={r.id}
-              href={`/r/${encodeURIComponent(r.id)}?t=${r.access_token}`}
-              className="block bg-neutral-900 border border-neutral-800 hover:border-orange-500 rounded-xl p-5 transition-colors"
-            >
-              <div className="flex items-center justify-between mb-1">
-                <span className="font-mono text-orange-500 text-sm">{r.id}</span>
-                <Badge tone={meta.tone}>{meta.label}</Badge>
-              </div>
-              <div className="text-sm text-neutral-400">
-                {r.request_type === "booking" ? "Field service booking" : "Hose quote request"}
-                {r.location ? ` · ${r.location}` : ""}
-                {r.created_at ? ` · ${new Date(r.created_at).toLocaleDateString()}` : ""}
-              </div>
-            </a>
+            <div key={r.id} className="bg-neutral-900 border border-neutral-800 rounded-xl p-5">
+              <a href={`/r/${encodeURIComponent(r.id)}?t=${r.access_token}`} className="block group">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-mono text-orange-500 text-sm group-hover:underline">{r.id}</span>
+                  <Badge tone={meta.tone}>{meta.label}</Badge>
+                </div>
+                <div className="text-sm text-neutral-400">
+                  {isQuote ? "Hose quote request" : "Field service booking"}
+                  {r.location ? ` · ${r.location}` : ""}
+                  {r.created_at ? ` · ${new Date(r.created_at).toLocaleDateString()}` : ""}
+                </div>
+              </a>
+
+              {(isQuote || registered) && (
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-3">
+                  {isQuote && (
+                    <button onClick={() => orderAgain(r)} className="flex items-center gap-1.5 text-orange-400 hover:text-orange-300 text-sm font-semibold">
+                      <RotateCcw className="w-3.5 h-3.5" /> Order again
+                    </button>
+                  )}
+                  {canSave && savingId !== r.id && (
+                    <button onClick={() => { setSavingId(r.id); setSavedMessage(""); }} className="flex items-center gap-1.5 text-neutral-300 hover:text-white text-sm font-semibold">
+                      <Tractor className="w-3.5 h-3.5" /> Save to a machine
+                    </button>
+                  )}
+                  {registered && (
+                    <span className="flex items-center gap-1.5 text-neutral-500 text-xs">
+                      <Tractor className="w-3.5 h-3.5" /> In your maintenance register
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {savingId === r.id && (
+                <SaveToMachine
+                  requestId={r.id}
+                  assemblies={r.assemblies || []}
+                  supplierId={r.selected_supplier_id || null}
+                  onCancel={() => setSavingId(null)}
+                  onAddMachine={onMachines}
+                  onSaved={(machineName) => {
+                    setInRegister((s) => new Set(s).add(r.id));
+                    setSavingId(null);
+                    setSavedMessage(`Saved ${r.id} to ${machineName}. Find it under My machines.`);
+                  }}
+                />
+              )}
+            </div>
           );
         })}
       </div>

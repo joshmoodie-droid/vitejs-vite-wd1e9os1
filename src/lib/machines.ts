@@ -7,6 +7,7 @@
 
 import { supabase } from "../supabaseClient";
 import { BORES } from "./catalog";
+import { emptyAssembly } from "./forms";
 
 export type Machine = {
   id: string;
@@ -189,10 +190,23 @@ export async function listHoses(machineId: string): Promise<MachineHose[]> {
   return rows.map(hoseFromRow);
 }
 
-export async function createHose(machineId: string, h: Omit<MachineHose, "id" | "machineId">): Promise<MachineHose> {
+// Optional links back to the HoseQuote job a register row came from.
+export type JobLink = { requestId?: string; supplierId?: string | null };
+const jobLinkToRow = (l?: JobLink) =>
+  l ? { request_id: l.requestId ?? null, supplier_id: l.supplierId ?? null } : {};
+
+export async function createHose(
+  machineId: string,
+  h: Omit<MachineHose, "id" | "machineId">,
+  link?: JobLink,
+): Promise<MachineHose> {
   return hoseFromRow(
     unwrap<Row>(
-      await supabase.from("machine_hoses").insert({ ...hoseToRow(h), machine_id: machineId }).select().single(),
+      await supabase
+        .from("machine_hoses")
+        .insert({ ...hoseToRow(h), ...jobLinkToRow(link), machine_id: machineId })
+        .select()
+        .single(),
     ),
   );
 }
@@ -224,12 +238,26 @@ export async function listLog(machineId: string): Promise<ServiceLogEntry[]> {
 export async function createLogEntry(
   machineId: string,
   e: Omit<ServiceLogEntry, "id" | "machineId">,
+  link?: JobLink,
 ): Promise<ServiceLogEntry> {
   return logFromRow(
     unwrap<Row>(
-      await supabase.from("service_log").insert({ ...logToRow(e), machine_id: machineId }).select().single(),
+      await supabase
+        .from("service_log")
+        .insert({ ...logToRow(e), ...jobLinkToRow(link), machine_id: machineId })
+        .select()
+        .single(),
     ),
   );
+}
+
+// Request ids that already have hoses saved in the customer's register, so a
+// past job isn't offered "Save to a machine" twice.
+export async function listSavedRequestIds(): Promise<Set<string>> {
+  const rows = unwrap<Row[]>(
+    await supabase.from("machine_hoses").select("request_id").not("request_id", "is", null),
+  );
+  return new Set(rows.map((r) => str(r.request_id)));
 }
 
 export async function updateLogEntry(id: string, e: Omit<ServiceLogEntry, "id" | "machineId">): Promise<ServiceLogEntry> {
@@ -255,4 +283,35 @@ export function describeHoseSpec(s: HoseSpec): string {
   const fittings = [s.fittingAType, s.fittingBType].filter(Boolean);
   if (fittings.length) parts.push(fittings.join(" → "));
   return parts.join(", ") || "No spec recorded";
+}
+
+// ---------- quote-form prefill ("Order again" / "Get a quote") ----------
+
+// Partial quote-form state. App.startPrefilledQuote merges it over a blank form.
+export type QuotePrefill = {
+  machineId?: string;
+  assemblies?: Record<string, unknown>[];
+  location?: string;
+  selectedSupplierId?: string;
+  fulfillment?: string;
+  deliveryAddress?: string;
+};
+
+// A saved hose as a quote-form assembly. machineHoseId lets the completion
+// trigger update this hose in the register instead of adding a new one.
+export function assemblyFromHose(h: MachineHose): Record<string, unknown> {
+  return { ...emptyAssembly(), ...h.spec, quantity: 1, machineHoseId: h.id };
+}
+
+// A past request's assemblies, re-keyed so the form treats them as new rows.
+export function assembliesFromRequest(assemblies: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(assemblies) || assemblies.length === 0) return [emptyAssembly()];
+  return assemblies.map((a) => ({ ...(a as Record<string, unknown>), id: emptyAssembly().id }));
+}
+
+// Spec to store in the register from a quote-form assembly.
+export function hoseSpecFromAssembly(a: Record<string, unknown>): HoseSpec {
+  const spec = { ...emptyHoseSpec() } as Record<string, unknown>;
+  for (const k of Object.keys(spec)) if (a[k] !== undefined && a[k] !== null) spec[k] = String(a[k]);
+  return spec as HoseSpec;
 }
