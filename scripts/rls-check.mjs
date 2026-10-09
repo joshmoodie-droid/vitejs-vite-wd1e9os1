@@ -6,6 +6,7 @@
 //
 // Contract (see supabase/migrations/0006_phase3c_rls_lockdown.sql):
 //   - requests / quotes / connections  -> invisible to anon (SELECT returns [])
+//   - machines / machine_hoses / service_log -> no anon access at all (0012)
 //   - suppliers / supplier_pricing     -> still world-readable (customer picker)
 //   - every table                      -> anon cannot INSERT / UPDATE
 //   - the sanctioned anon path (SECURITY DEFINER RPCs) still callable
@@ -81,6 +82,31 @@ for (const table of ["requests", "quotes", "connections"]) {
   );
 }
 
+// --- 1b. customer-only tables (maintenance register, migration 0012) --------
+// anon has no grants on these at all, so PostgREST answers 401/403
+// (permission denied) rather than 200 []. Either means no rows leaked. These
+// tables may be empty, so the INSERT probes in section 3 are the real guard.
+for (const table of ["machines", "machine_hoses", "service_log"]) {
+  const res = await api(`/${table}?select=id&limit=5`);
+  let body = null;
+  try {
+    body = await res.json();
+  } catch {
+    /* non-JSON */
+  }
+  const locked =
+    res.status === 401 ||
+    res.status === 403 ||
+    (res.status === 200 && Array.isArray(body) && body.length === 0);
+  check(
+    `anon cannot read ${table}`,
+    locked,
+    `expected 401/403 or 200 [] — got ${res.status}, ${
+      Array.isArray(body) ? `${body.length} row(s)` : JSON.stringify(body)?.slice(0, 120)
+    }`,
+  );
+}
+
 // --- 2. tables that must stay world-readable -------------------------------
 // The customer supplier-picker runs unauthenticated; over-locking these breaks
 // the app just as surely as under-locking the others leaks data.
@@ -124,6 +150,9 @@ const inserts = [
   ["connections", { quote_id: NONE }],
   ["suppliers", { company_name: `${marker} (delete me)` }],
   ["supplier_pricing", { supplier_id: realSupplier?.id ?? NONE }],
+  ["machines", { name: `${marker} (delete me)` }],
+  ["machine_hoses", { machine_id: "00000000-0000-0000-0000-000000000000", position: marker }],
+  ["service_log", { machine_id: "00000000-0000-0000-0000-000000000000" }],
 ];
 for (const [table, row] of inserts) {
   const res = await api(`/${table}`, {

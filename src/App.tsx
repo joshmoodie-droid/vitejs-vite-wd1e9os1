@@ -4,7 +4,7 @@
 // src/ IS type-checked in CI — put new work in its own module rather than
 // growing this file, and drop this pragma once it's broken up.
 import React, { useState, useEffect, useCallback } from "react";
-import { Wrench, Gauge, Settings, Droplet, MapPin, User, ChevronLeft, ChevronRight, RefreshCw, Send, Lock, Unlock, LogOut, Building2, CheckCircle2, Plus, Clock, Truck, ClipboardList, ArrowLeft } from "lucide-react";
+import { Wrench, Gauge, Settings, Droplet, MapPin, User, ChevronLeft, ChevronRight, RefreshCw, Send, Lock, Unlock, LogOut, Building2, CheckCircle2, Plus, Clock, Truck, ClipboardList, ArrowLeft, Tractor } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import { HOSE_TYPES, BORES, FITTING_TYPES, ORIENTATIONS, URGENCY, EQUIPMENT_TYPES, JOB_ISSUES } from "./lib/catalog";
 import { defaultPricing, calcEstimate, combinedTotal, calcBookingEstimate } from "./lib/pricing";
@@ -21,6 +21,7 @@ import { PricingAdmin } from "./components/PricingAdmin";
 import { AdminSuppliers } from "./components/AdminSuppliers";
 import { ActiveQuoteEditor, SupplierFieldServiceReview, AutoQuoteReview } from "./components/quoteEditors";
 import { MyRequests } from "./components/MyRequests";
+import { MyMachines } from "./components/machines/MyMachines";
 import { JobQuoteCard, RequestCard } from "./components/portalCards";
 import { FieldServiceSection } from "./components/FieldServiceSection";
 import { SupplierPortal, AdminPortal } from "./components/portals";
@@ -48,7 +49,7 @@ export default function HoseQuoteApp() {
   // ---- customer accounts (Phase 2) ----
   const [customer, setCustomer] = useState(null); // Supabase auth user
   const [profile, setProfile] = useState(null);
-  const [customerView, setCustomerView] = useState("new"); // "new" | "auth" | "mine"
+  const [customerView, setCustomerView] = useState("new"); // "new" | "auth" | "mine" | "machines"
 
   const [step, setStep] = useState(1);
   const [form, setForm] = useState(emptyForm());
@@ -444,23 +445,31 @@ export default function HoseQuoteApp() {
   return (
     <div className="min-h-screen bg-[#0B0B0C] font-sans" style={{ colorScheme: "dark" }}>
       <header className="border-b border-neutral-800 sticky top-0 bg-[#0B0B0C] z-10">
-        <div className="max-w-3xl mx-auto px-5 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-orange-500/10 border border-orange-500/40 flex items-center justify-center">
+        <div className="max-w-3xl mx-auto px-4 sm:px-5 py-4 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-orange-500/10 border border-orange-500/40 flex items-center justify-center">
               <Wrench className="w-5 h-5 text-orange-500" />
             </div>
             <div className="text-white font-extrabold leading-none">HoseQuote</div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             {view === "customer" && (
               <div className="flex items-center gap-2 text-sm">
                 {customer ? (
                   <>
                     <button
-                      onClick={() => { setFlowType(null); setCustomerView("mine"); }}
-                      className="text-neutral-300 hover:text-white font-semibold"
+                      onClick={() => { setFlowType(null); setCustomerView("machines"); }}
+                      title="My machines" aria-label="My machines"
+                      className="text-neutral-300 hover:text-white font-semibold whitespace-nowrap"
                     >
-                      My requests
+                      <Tractor className="w-4 h-4 sm:hidden" /><span className="hidden sm:inline">My machines</span>
+                    </button>
+                    <button
+                      onClick={() => { setFlowType(null); setCustomerView("mine"); }}
+                      title="My requests" aria-label="My requests"
+                      className="text-neutral-300 hover:text-white font-semibold whitespace-nowrap"
+                    >
+                      <ClipboardList className="w-4 h-4 sm:hidden" /><span className="hidden sm:inline">My requests</span>
                     </button>
                     <button onClick={signOut} title="Sign out" aria-label="Sign out" className="text-neutral-500 hover:text-white">
                       <LogOut className="w-4 h-4" />
@@ -503,6 +512,7 @@ export default function HoseQuoteApp() {
             customer={customer}
             onSignIn={() => setCustomerView("auth")}
             onMine={() => setCustomerView("mine")}
+            onMachines={() => setCustomerView("machines")}
           />
         )}
         {view === "customer" && flowType === null && customerView === "auth" && (
@@ -518,6 +528,16 @@ export default function HoseQuoteApp() {
           ) : (
             <CustomerAuth
               onSignedIn={() => setCustomerView("mine")}
+              onBack={() => setCustomerView("new")}
+            />
+          )
+        )}
+        {view === "customer" && flowType === null && customerView === "machines" && (
+          customer ? (
+            <MyMachines email={customer.email} />
+          ) : (
+            <CustomerAuth
+              onSignedIn={() => setCustomerView("machines")}
               onBack={() => setCustomerView("new")}
             />
           )
