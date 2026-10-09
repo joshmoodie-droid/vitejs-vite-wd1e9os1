@@ -150,7 +150,7 @@ export function SupplierPortal({ supplier, authUserId, onLogout, requests, quote
 }
 
 export function AdminPortal({
-  onLogout, suppliers, pricingBySupplier, requests, quotes, connections,
+  authUserId, onLogout, suppliers, pricingBySupplier, requests, quotes, connections,
   onSavePricing, onSubmitManualQuote, onUnlock, onConfirmQuote, onRejectQuote, onUpdateFieldService, onMarkComplete, onEditQuote,
   onAddSupplier, onUpdateSupplier, onDeleteSupplier,
 }: any) {
@@ -196,6 +196,7 @@ export function AdminPortal({
       <div className="flex gap-1 bg-neutral-900 rounded-lg p-1 mb-6">
         {[
           { key: "jobs", label: "Jobs", icon: Wrench },
+          { key: "audits", label: "Audits", icon: ClipboardCheck },
           { key: "suppliers", label: "Suppliers", icon: Building2 },
         ].map((t) => (
           <button key={t.key} onClick={() => setTab(t.key)} className={`flex-1 py-2 rounded-md font-semibold text-sm transition-colors flex items-center justify-center gap-1.5 ${tab === t.key ? "bg-orange-500 text-black" : "text-neutral-400"}`}>
@@ -203,6 +204,10 @@ export function AdminPortal({
           </button>
         ))}
       </div>
+
+      {tab === "audits" && (
+        <SupplierAudits userId={authUserId} suppliers={suppliers} pricingBySupplier={pricingBySupplier} />
+      )}
 
       {tab === "jobs" && (
         <div>
