@@ -1,7 +1,7 @@
 // The "What do you need?" landing screen — pick quote vs. field-service.
 // Stateless. Extracted verbatim from App.tsx.
 
-import { Droplet, Wrench, Truck, Tractor } from "lucide-react";
+import { Droplet, Wrench, Truck, Tractor, ClipboardCheck } from "lucide-react";
 
 export function FlowChooser({ onChoose, customer, onSignIn, onMine, onMachines }) {
   return (
@@ -37,6 +37,18 @@ export function FlowChooser({ onChoose, customer, onSignIn, onMine, onMachines }
           </div>
           <div className="text-white font-bold text-lg mb-1 group-hover:text-orange-500 transition-colors">Book a Field Service Job</div>
           <p className="text-neutral-500 text-sm">Not sure of the exact hose spec yet? Book a technician to come assess and fix it on site — describe the job and get indicative callout pricing.</p>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => onChoose("audit")}
+          className="w-full text-left bg-neutral-900 border border-neutral-800 hover:border-orange-500 rounded-xl p-6 transition-colors group"
+        >
+          <div className="w-12 h-12 rounded-lg bg-orange-500/10 border border-orange-500/40 flex items-center justify-center mb-4">
+            <ClipboardCheck className="w-6 h-6 text-orange-500" />
+          </div>
+          <div className="text-white font-bold text-lg mb-1 group-hover:text-orange-500 transition-colors">Book a Hose Audit</div>
+          <p className="text-neutral-500 text-sm">A supplier inspects and photographs every hose on your machines and tells you what to replace now, what can wait, and what's fine.</p>
         </button>
 
         <button
