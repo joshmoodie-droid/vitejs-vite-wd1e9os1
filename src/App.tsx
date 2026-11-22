@@ -45,6 +45,7 @@ export default function HoseQuoteApp() {
   const [view, setView] = useState(initialView);
   const [flowType, setFlowType] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [notice, setNotice] = useState(null); // message shown in a banner when something fails to save
   const [suppliers, setSuppliers] = useState([]);
   const [pricingBySupplier, setPricingBySupplier] = useState({});
   const [requests, setRequests] = useState([]);
@@ -80,6 +81,22 @@ export default function HoseQuoteApp() {
       document.body.style.margin = "";
     };
   }, []);
+
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(null), 10000);
+    return () => clearTimeout(t);
+  }, [notice]);
+
+  // A write that errors comes back as `error`, but one that row-level security
+  // quietly filters out comes back as success with zero rows. Both are failures,
+  // and the screen must not pretend otherwise.
+  const wrote = ({ data, error }) => !error && (data?.length ?? 0) > 0;
+  const fail = (message, error) => {
+    console.error(message, error ?? "no rows were changed");
+    setNotice(message);
+    return false;
+  };
 
   const loadAll = useCallback(async (opts) => {
     if (!opts?.quiet) setLoading(true);
@@ -299,7 +316,8 @@ export default function HoseQuoteApp() {
       machine_id: customer && form.machineId ? form.machineId : null,
       photos: customer && form.photos?.length ? form.photos : null,
     };
-    const { data: created } = await supabase.rpc("create_request", { r: row });
+    const { data: created, error: requestError } = await supabase.rpc("create_request", { r: row });
+    if (requestError) { fail("Your request couldn't be sent — please check your connection and try again.", requestError); return; }
     const record = requestFromRow({ ...row, ...(created ?? { created_at: new Date().toISOString() }) });
 
     const pricing = pricingBySupplier[form.selectedSupplierId];
@@ -318,8 +336,14 @@ export default function HoseQuoteApp() {
         lead_time_days: form.urgency === "emergency" ? 1 : form.urgency === "priority" ? 2 : 4,
         quote_type: "auto", status: "pending", field_service: fieldService,
       };
-      await supabase.rpc("create_auto_quote", { q: quoteRow });
-      newQuoteRecord = quoteFromRow({ ...quoteRow, created_at: new Date().toISOString() });
+      const { error: quoteError } = await supabase.rpc("create_auto_quote", { q: quoteRow });
+      if (quoteError) {
+        // The request itself was saved and the supplier is notified, so don't
+        // block the customer — just don't invent a price that isn't in the database.
+        fail("Your request was sent, but we couldn't save the price estimate — the supplier will quote you directly.", quoteError);
+      } else {
+        newQuoteRecord = quoteFromRow({ ...quoteRow, created_at: new Date().toISOString() });
+      }
     }
 
     setRequests((r) => [record, ...r]);
@@ -359,8 +383,8 @@ export default function HoseQuoteApp() {
     if (overrides.hoseAssemblyCost !== undefined) row.hose_assembly_cost = overrides.hoseAssemblyCost;
     if (overrides.deliveryCharge !== undefined) row.delivery_charge = overrides.deliveryCharge;
     row.status = "confirmed";
-    const { error } = await supabase.from("quotes").update(row).eq("id", quoteId);
-    if (error) { console.error("Confirm quote failed", error); return; }
+    const res = await supabase.from("quotes").update(row).eq("id", quoteId).select("id");
+    if (!wrote(res)) { fail("Couldn't confirm the quote — please try again.", res.error); return; }
     setQuotes((qs) => qs.map((q) => (q.id === quoteId ? { ...q, ...overrides, status: "confirmed" } : q)));
   };
 
@@ -377,14 +401,15 @@ export default function HoseQuoteApp() {
     if (overrides.labour !== undefined) row.labour = overrides.labour;
     if (overrides.hoseAssemblyCost !== undefined) row.hose_assembly_cost = overrides.hoseAssemblyCost;
     if (overrides.deliveryCharge !== undefined) row.delivery_charge = overrides.deliveryCharge;
-    const { error } = await supabase.from("quotes").update(row).eq("id", quoteId);
-    if (error) { console.error("Edit quote failed", error); return; }
+    const res = await supabase.from("quotes").update(row).eq("id", quoteId).select("id");
+    if (!wrote(res)) { fail("Couldn't save the pricing changes — please try again.", res.error); return; }
     setQuotes((qs) => qs.map((q) => (q.id === quoteId ? { ...q, ...overrides } : q)));
     loadAll({ quiet: true }); // the job's HoseQuote fee follows the new price
   };
 
   const rejectQuote = async (quoteId) => {
-    await supabase.from("quotes").update({ status: "rejected" }).eq("id", quoteId);
+    const res = await supabase.from("quotes").update({ status: "rejected" }).eq("id", quoteId).select("id");
+    if (!wrote(res)) { fail("Couldn't reject that quote — please try again.", res.error); return; }
     setQuotes((qs) => qs.map((q) => (q.id === quoteId ? { ...q, status: "rejected" } : q)));
   };
 
@@ -395,7 +420,7 @@ export default function HoseQuoteApp() {
       p_token: req?.accessToken ?? null,
       p_quote_id: quoteId,
     });
-    if (error) { console.error("Accept failed", error); return; }
+    if (error) { fail("Couldn't accept the quote — please try again.", error); return; }
 
     const target = quotes.find((q) => q.id === quoteId);
     const fs = target?.fieldService;
@@ -412,12 +437,15 @@ export default function HoseQuoteApp() {
   const unlockContact = async (quoteId) => {
     const existing = connections.find((c) => c.quoteId === quoteId);
     const now = new Date().toISOString();
+    const unlockFailed = "Couldn't unlock the contact details — please try again.";
     if (existing) {
-      await supabase.from("connections").update({ unlocked: true, unlocked_at: now }).eq("quote_id", quoteId);
+      const res = await supabase.from("connections").update({ unlocked: true, unlocked_at: now }).eq("quote_id", quoteId).select("id");
+      if (!wrote(res)) { fail(unlockFailed, res.error); return; }
       setConnections((cs) => cs.map((c) => (c.quoteId === quoteId ? { ...c, unlocked: true, unlockedAt: now } : c)));
     } else {
       const row = { id: `C-${Date.now()}`, quote_id: quoteId, unlocked: true, unlocked_at: now };
-      await supabase.from("connections").insert(row);
+      const res = await supabase.from("connections").insert(row).select("id");
+      if (!wrote(res)) { fail(unlockFailed, res.error); return; }
       setConnections((cs) => [...cs, connectionFromRow(row)]);
     }
   };
@@ -430,7 +458,8 @@ export default function HoseQuoteApp() {
       calloutFee: pricing?.calloutFee ?? 65, travelCharge: pricing?.travelBase ?? 45,
       customerLabourHours: labourHoursEstimate || null, labour: 0, labourHours: null, hourlyRate: null,
     };
-    await supabase.from("quotes").update({ field_service: fieldService }).eq("id", quoteId);
+    const res = await supabase.from("quotes").update({ field_service: fieldService }).eq("id", quoteId).select("id");
+    if (!wrote(res)) { fail("Couldn't send your on-site service request — please try again.", res.error); return; }
     setQuotes((qs) => qs.map((qt) => (qt.id === quoteId ? { ...qt, fieldService } : qt)));
   };
 
@@ -438,48 +467,60 @@ export default function HoseQuoteApp() {
     const q = quotes.find((qt) => qt.id === quoteId);
     const labour = Math.round((parseFloat(labourHours) || 0) * (parseFloat(hourlyRate) || 0));
     const fieldService = { ...q.fieldService, calloutFee, travelCharge, labour, labourHours, hourlyRate, status: "quoted" };
-    await supabase.from("quotes").update({ field_service: fieldService }).eq("id", quoteId);
+    const res = await supabase.from("quotes").update({ field_service: fieldService }).eq("id", quoteId).select("id");
+    if (!wrote(res)) { fail("Couldn't send the on-site pricing to the customer — please try again.", res.error); return; }
     setQuotes((qs) => qs.map((qt) => (qt.id === quoteId ? { ...qt, fieldService } : qt)));
   };
 
   const confirmFieldService = async (quoteId) => {
     const q = quotes.find((qt) => qt.id === quoteId);
     const fieldService = { ...q.fieldService, status: "confirmed" };
-    await supabase.from("quotes").update({ field_service: fieldService }).eq("id", quoteId);
+    const res = await supabase.from("quotes").update({ field_service: fieldService }).eq("id", quoteId).select("id");
+    if (!wrote(res)) { fail("Couldn't confirm the on-site pricing — please try again.", res.error); return; }
     setQuotes((qs) => qs.map((qt) => (qt.id === quoteId ? { ...qt, fieldService } : qt)));
   };
 
   // NEW: mark a quote as fully completed (job done)
   const markComplete = async (quoteId) => {
     const now = new Date().toISOString();
-    await supabase.from("quotes").update({ status: "completed", completed_at: now }).eq("id", quoteId);
+    const res = await supabase.from("quotes").update({ status: "completed", completed_at: now }).eq("id", quoteId).select("id");
+    if (!wrote(res)) { fail("Couldn't mark the job complete — please try again.", res.error); return; }
     setQuotes((qs) => qs.map((q) => (q.id === quoteId ? { ...q, status: "completed", completedAt: now } : q)));
     loadAll({ quiet: true }); // picks up the job's HoseQuote fee (set server-side)
   };
 
   const savePricingFor = async (supplierId, next) => {
-    await supabase.from("supplier_pricing").update(pricingToRow(next)).eq("supplier_id", supplierId);
+    const res = await supabase.from("supplier_pricing").update(pricingToRow(next)).eq("supplier_id", supplierId).select("supplier_id");
+    if (!wrote(res)) { fail("Couldn't save the pricing — please try again.", res.error); return; }
     setPricingBySupplier((p) => ({ ...p, [supplierId]: next }));
   };
 
   const submitManualQuote = async (requestId, supplierId, priceLow, priceHigh, leadTimeDays) => {
     const id = `Q-${Date.now()}`;
     const row = { id, request_id: requestId, supplier_id: supplierId, price_low: priceLow, price_high: priceHigh, lead_time_days: leadTimeDays, quote_type: "manual", status: "confirmed" };
-    await supabase.from("quotes").insert(row);
+    const res = await supabase.from("quotes").insert(row).select("id");
+    if (!wrote(res)) { fail("Couldn't send your quote — please try again.", res.error); return; }
     setQuotes((q) => [quoteFromRow({ ...row, created_at: new Date().toISOString() }), ...q]);
   };
 
   // ---- Admin: supplier account management ----
   const addSupplier = async (companyName, serviceArea, contactEmail, contactPhone) => {
     const row = { company_name: companyName, service_area: serviceArea || "", contact_email: contactEmail || null, contact_phone: contactPhone || null };
-    const { data: inserted } = await supabase.from("suppliers").insert([row]).select();
+    const { data: inserted, error: addError } = await supabase.from("suppliers").insert([row]).select();
     const newSupplier = (inserted || []).map(supplierFromRow)[0];
-    if (newSupplier) {
-      setSuppliers((s) => [...s, newSupplier]);
-      const pricingRow = { supplier_id: newSupplier.id, ...pricingToRow(defaultPricing(1)) };
-      await supabase.from("supplier_pricing").insert([pricingRow]);
-      setPricingBySupplier((p) => ({ ...p, [newSupplier.id]: defaultPricing(1) }));
+    if (!newSupplier) { fail("Couldn't add the supplier — please try again.", addError); return null; }
+
+    // A supplier with no pricing row is invisible to customers, so the two
+    // inserts stand or fall together.
+    const pricingRow = { supplier_id: newSupplier.id, ...pricingToRow(defaultPricing(1)) };
+    const pricingRes = await supabase.from("supplier_pricing").insert([pricingRow]).select("supplier_id");
+    if (!wrote(pricingRes)) {
+      await supabase.from("suppliers").delete().eq("id", newSupplier.id);
+      fail("Couldn't set up the new supplier's default pricing, so nothing was added — please try again.", pricingRes.error);
+      return null;
     }
+    setSuppliers((s) => [...s, newSupplier]);
+    setPricingBySupplier((p) => ({ ...p, [newSupplier.id]: defaultPricing(1) }));
     return newSupplier;
   };
 
@@ -489,12 +530,15 @@ export default function HoseQuoteApp() {
     if (fields.serviceArea !== undefined) row.service_area = fields.serviceArea;
     if (fields.contactEmail !== undefined) row.contact_email = fields.contactEmail;
     if (fields.contactPhone !== undefined) row.contact_phone = fields.contactPhone;
-    await supabase.from("suppliers").update(row).eq("id", supplierId);
+    const res = await supabase.from("suppliers").update(row).eq("id", supplierId).select("id");
+    if (!wrote(res)) return fail("Couldn't save the supplier's details — please try again.", res.error);
     setSuppliers((ss) => ss.map((s) => (s.id === supplierId ? { ...s, ...fields } : s)));
+    return true;
   };
 
   const deleteSupplier = async (supplierId) => {
-    await supabase.from("suppliers").delete().eq("id", supplierId);
+    const res = await supabase.from("suppliers").delete().eq("id", supplierId).select("id");
+    if (!wrote(res)) { fail("Couldn't delete the supplier — please try again.", res.error); return; }
     setSuppliers((ss) => ss.filter((s) => s.id !== supplierId));
   };
 
@@ -570,6 +614,15 @@ export default function HoseQuoteApp() {
           </div>
         </div>
       </header>
+
+      {notice && (
+        <div role="alert" className="max-w-3xl mx-auto px-5 pt-4">
+          <div className="flex items-start justify-between gap-3 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+            <span>{notice}</span>
+            <button onClick={() => setNotice(null)} aria-label="Dismiss" className="text-red-300 hover:text-white leading-none text-lg">×</button>
+          </div>
+        </div>
+      )}
 
       {/* pb: room for the phone tab bar (MobileNav) */}
       <main className="max-w-3xl mx-auto px-5 pt-8 pb-28 sm:pb-8">
@@ -656,7 +709,8 @@ export default function HoseQuoteApp() {
                 photos: customer && record.photos?.length ? record.photos : null,
                 issue: record.issue, description: record.description, labour_hours_estimate: record.labourHoursEstimate,
               };
-              const { data: createdReq } = await supabase.rpc("create_request", { r: row });
+              const { data: createdReq, error: requestError } = await supabase.rpc("create_request", { r: row });
+              if (requestError) { fail("Your booking couldn't be sent — please check your connection and try again.", requestError); return false; }
               setRequests((rs) => [requestFromRow({ ...row, ...(createdReq ?? { created_at: new Date().toISOString() }) }), ...rs]);
               if (newQuote) {
                 const qrow = {
@@ -666,9 +720,11 @@ export default function HoseQuoteApp() {
                   customer_labour_hours: newQuote.customerLabourHours, hose_assembly_cost: 0,
                   lead_time_days: newQuote.leadTimeDays, quote_type: "auto", status: "pending",
                 };
-                await supabase.rpc("create_auto_quote", { q: qrow });
-                setQuotes((qs) => [quoteFromRow({ ...qrow, created_at: new Date().toISOString() }), ...qs]);
+                const { error: quoteError } = await supabase.rpc("create_auto_quote", { q: qrow });
+                if (quoteError) fail("Your booking was sent, but we couldn't save the price estimate — the supplier will quote you directly.", quoteError);
+                else setQuotes((qs) => [quoteFromRow({ ...qrow, created_at: new Date().toISOString() }), ...qs]);
               }
+              return true;
             }}
             acceptQuote={acceptQuote}
             onBack={() => setFlowType(null)}

@@ -455,7 +455,8 @@ export function BookingFlow({ customer, suppliers, pricingBySupplier, quotes, on
       leadTimeDays: form.urgency === "emergency" ? 1 : form.urgency === "priority" ? 2 : 4,
     } : null;
 
-    await onSubmitBooking(record, newQuote);
+    const sent = await onSubmitBooking(record, newQuote);
+    if (sent === false) return; // App already told the user; stay on the form so nothing is lost
     setSubmittedRequestId(id);
   };
 

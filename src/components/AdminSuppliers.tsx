@@ -43,7 +43,8 @@ function AdminSupplierRow({ supplier, pricing, onSavePricing, onUpdate, onDelete
   const [pricingOpen, setPricingOpen] = useState(false);
 
   const save = async () => {
-    await onUpdate({ companyName, serviceArea, contactEmail, contactPhone });
+    const ok = await onUpdate({ companyName, serviceArea, contactEmail, contactPhone });
+    if (ok === false) return; // App has already shown why
     setSavedMsg("Saved");
     setTimeout(() => setSavedMsg(""), 1500);
   };
@@ -97,9 +98,9 @@ function AdminAddSupplierForm({ onAdd, onDone }: any) {
   const submit = async () => {
     if (!companyName || !contactEmail) return;
     setSaving(true);
-    await onAdd(companyName, serviceArea, contactEmail, contactPhone);
+    const added = await onAdd(companyName, serviceArea, contactEmail, contactPhone);
     setSaving(false);
-    onDone();
+    if (added) onDone(); // on failure keep the form open so nothing typed is lost
   };
 
   return (
