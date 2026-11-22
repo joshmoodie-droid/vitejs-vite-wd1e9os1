@@ -451,16 +451,22 @@ export default function HoseQuoteApp() {
   };
 
   const requestFieldService = async (quoteId, siteAddress, accessNotes, labourHoursEstimate) => {
+    // A customer can't update quotes directly (row-level security), so this goes
+    // through a database function that checks the request's access token, like
+    // acceptQuote does. The function builds the field_service block and returns it.
     const q = quotes.find((qt) => qt.id === quoteId);
-    const pricing = pricingBySupplier[q?.supplierId];
-    const fieldService = {
-      requested: true, status: "pending", siteAddress, accessNotes,
-      calloutFee: pricing?.calloutFee ?? 65, travelCharge: pricing?.travelBase ?? 45,
-      customerLabourHours: labourHoursEstimate || null, labour: 0, labourHours: null, hourlyRate: null,
-    };
-    const res = await supabase.from("quotes").update({ field_service: fieldService }).eq("id", quoteId).select("id");
-    if (!wrote(res)) { fail("Couldn't send your on-site service request — please try again.", res.error); return; }
+    const req = requests.find((r) => r.id === q?.requestId);
+    const { data: fieldService, error } = await supabase.rpc("request_field_service_by_token", {
+      p_request_id: q?.requestId,
+      p_token: req?.accessToken ?? null,
+      p_quote_id: quoteId,
+      p_site_address: siteAddress,
+      p_access_notes: accessNotes || "",
+      p_labour_hours: labourHoursEstimate ? String(labourHoursEstimate) : null,
+    });
+    if (error || !fieldService) return fail("Couldn't send your on-site service request — please try again.", error);
     setQuotes((qs) => qs.map((qt) => (qt.id === quoteId ? { ...qt, fieldService } : qt)));
+    return true;
   };
 
   const updateFieldService = async (quoteId, calloutFee, travelCharge, labourHours, hourlyRate) => {
@@ -474,10 +480,15 @@ export default function HoseQuoteApp() {
 
   const confirmFieldService = async (quoteId) => {
     const q = quotes.find((qt) => qt.id === quoteId);
-    const fieldService = { ...q.fieldService, status: "confirmed" };
-    const res = await supabase.from("quotes").update({ field_service: fieldService }).eq("id", quoteId).select("id");
-    if (!wrote(res)) { fail("Couldn't confirm the on-site pricing — please try again.", res.error); return; }
+    const req = requests.find((r) => r.id === q?.requestId);
+    const { data: fieldService, error } = await supabase.rpc("confirm_field_service_by_token", {
+      p_request_id: q?.requestId,
+      p_token: req?.accessToken ?? null,
+      p_quote_id: quoteId,
+    });
+    if (error || !fieldService) return fail("Couldn't confirm the on-site pricing — please try again.", error);
     setQuotes((qs) => qs.map((qt) => (qt.id === quoteId ? { ...qt, fieldService } : qt)));
+    return true;
   };
 
   // NEW: mark a quote as fully completed (job done)
