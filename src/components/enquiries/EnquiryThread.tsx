@@ -1,6 +1,7 @@
 // One enquiry as a message thread: the customer's messages and the supplier's
-// replies, a reply box, and "mark as resolved". Not live chat — Refresh (or
-// reopening the page) fetches new replies.
+// replies, a reply box, and a close button. Used by both sides — `role` says
+// which one is looking. Not live chat: Refresh (or reopening the page) fetches
+// new messages.
 
 import { useCallback, useEffect, useState } from "react";
 import { ArrowLeft, RefreshCw } from "lucide-react";
@@ -8,15 +9,16 @@ import { Badge, inputClass } from "../ui";
 import { PhotoStrip } from "../photos/PhotoStrip";
 import { PhotoUploader } from "../photos/PhotoUploader";
 import {
-  INQUIRY_STATUS, isUnread, listMessages, markInquiryRead, postCustomerMessage, closeInquiry,
-  type Inquiry, type InquiryMessage,
+  INQUIRY_STATUS, isUnread, listMessages, markInquiryRead, postMessage, closeInquiry,
+  type Inquiry, type InquiryMessage, type InquiryRole,
 } from "../../lib/inquiries";
 
 export function EnquiryThread({
-  inquiry, userId, onBack, onChanged,
+  inquiry, userId, role, onBack, onChanged,
 }: {
   inquiry: Inquiry;
   userId: string;
+  role: InquiryRole;
   onBack: () => void;
   onChanged: () => void; // the list should reload (status / unread changed)
 }) {
@@ -40,22 +42,23 @@ export function EnquiryThread({
   useEffect(() => { load(); }, [load]);
 
   // Opening the thread reads it. Best effort — a failure here only means the
-  // "new reply" dot lingers.
+  // "new" marker lingers.
   useEffect(() => {
-    if (!isUnread(inquiry)) return;
-    markInquiryRead(inquiry.id).then(onChanged).catch(() => {});
+    if (!isUnread(inquiry, role)) return;
+    markInquiryRead(inquiry.id, role).then(onChanged).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inquiry.id]);
 
   const closed = inquiry.status === "closed";
   const meta = INQUIRY_STATUS[inquiry.status];
+  const otherName = role === "customer" ? inquiry.supplierName : inquiry.customerName;
 
   const send = async () => {
     if (!reply.trim()) { setActionError("Write a message first."); return; }
     setActionError("");
     setSending(true);
     try {
-      await postCustomerMessage(inquiry.id, reply.trim(), photos);
+      await postMessage(inquiry.id, role, reply.trim(), photos);
       setReply("");
       setPhotos([]);
       await load();
@@ -69,7 +72,7 @@ export function EnquiryThread({
   const close = async () => {
     setActionError("");
     try {
-      await closeInquiry(inquiry.id);
+      await closeInquiry(inquiry.id, role);
       setConfirmClose(false);
       onChanged();
     } catch (e) {
@@ -88,7 +91,7 @@ export function EnquiryThread({
         <span className="shrink-0"><Badge tone={meta.tone}>{meta.label}</Badge></span>
       </div>
       <p className="text-sm text-neutral-500 mb-6">
-        To {inquiry.supplierName}
+        {role === "customer" ? "To" : "From"} {otherName}
         {inquiry.location ? ` · ${inquiry.location}` : ""} · {new Date(inquiry.createdAt).toLocaleDateString()}
         <button onClick={load} className="ml-3 inline-flex items-center gap-1 text-orange-500 hover:text-orange-400 font-semibold">
           <RefreshCw className="w-3 h-3" /> Refresh
@@ -100,12 +103,12 @@ export function EnquiryThread({
 
       <div className="space-y-3 mb-6">
         {messages?.map((m) => {
-          const mine = m.sender === "customer";
+          const mine = m.sender === role;
           return (
             <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
               <div className={`max-w-[85%] rounded-xl px-4 py-3 border ${mine ? "bg-orange-500/10 border-orange-500/30" : "bg-neutral-900 border-neutral-800"}`}>
                 <div className="text-xs font-semibold mb-1 text-neutral-400">
-                  {mine ? "You" : inquiry.supplierName}
+                  {mine ? "You" : otherName}
                   <span className="font-normal text-neutral-600"> · {new Date(m.createdAt).toLocaleString()}</span>
                 </div>
                 <p className="text-white text-sm whitespace-pre-wrap break-words">{m.body}</p>
@@ -118,7 +121,9 @@ export function EnquiryThread({
 
       {closed ? (
         <p className="text-center text-sm text-neutral-500 border border-dashed border-neutral-800 rounded-xl py-6">
-          This enquiry is closed. You can start a new one any time from the home screen.
+          {role === "customer"
+            ? "This enquiry is closed. You can start a new one any time from the home screen."
+            : "This enquiry is closed."}
         </p>
       ) : (
         <div>
@@ -151,7 +156,7 @@ export function EnquiryThread({
               </span>
             ) : (
               <button onClick={() => setConfirmClose(true)} className="text-sm text-neutral-400 hover:text-white font-semibold">
-                Mark as resolved
+                {role === "customer" ? "Mark as resolved" : "Close enquiry"}
               </button>
             )}
           </div>

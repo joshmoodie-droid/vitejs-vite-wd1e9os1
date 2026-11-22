@@ -52,12 +52,13 @@ supabase functions deploy notify
 Function URL: `https://qwycavfmdpknnflxlylw.functions.supabase.co/notify`
 
 ### 6. Create the Database Webhooks
-Dashboard → **Database → Webhooks → Create a new hook** (do this twice):
+Dashboard → **Database → Webhooks → Create a new hook** (one per row below):
 
 | Name | Table | Events | Type | URL |
 |---|---|---|---|---|
 | `requests_insert` | `requests` | Insert | Supabase Edge Functions → `notify` | (auto) |
 | `quotes_changes` | `quotes` | Insert, Update | Supabase Edge Functions → `notify` | (auto) |
+| `inquiry_messages_insert` | `inquiry_messages` | Insert | Supabase Edge Functions → `notify` | (auto) |
 
 No custom headers needed (`notify` is deployed with `verify_jwt = false`).
 

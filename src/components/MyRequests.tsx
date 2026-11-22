@@ -30,7 +30,7 @@ export function MyRequests({ customerId, email, onNew, onOrderAgain, onMachines,
       .then((l) => { setInquiries(l); setInquiriesError(""); })
       .catch((e) => setInquiriesError(e instanceof Error ? e.message : String(e)));
   useEffect(() => { loadInquiries(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [customerId]);
-  const unreadEnquiries = (inquiries || []).filter(isUnread).length;
+  const unreadEnquiries = (inquiries || []).filter((i) => isUnread(i, "customer")).length;
   // request ids whose hoses are already in the register (linked at request
   // time, or saved here)
   const [inRegister, setInRegister] = useState(new Set());
