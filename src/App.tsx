@@ -13,7 +13,7 @@ import { supplierFromRow, pricingFromRow, requestFromRow, quoteFromRow, connecti
 import { loadCommissions } from "./lib/commission";
 import { areasMatch, slugify } from "./lib/util";
 import { currentRoute } from "./lib/routes";
-import { isNewSignIn } from "./lib/authEvents";
+import { shouldGoToMyRequests } from "./lib/authEvents";
 import { Field, inputClass, StepDot, SectionTitle, Badge } from "./components/ui";
 import { BookingSpec, AssemblyPriceBreakdown, ManufacturingSpec } from "./components/specs";
 import { AssemblyCard } from "./components/AssemblyCard";
@@ -151,27 +151,17 @@ export default function HoseQuoteApp() {
   }, [customer, loadAll]);
 
   // ---- customer auth wiring (Phase 2) ----
-  const signedInUserId = useRef(null); // who we last saw signed in, to tell a new sign-in from a repeat announcement
+  // The auth listener is registered once, so it reads the current screen from a ref.
+  const screen = useRef({ view, flowType, customerView });
+  useEffect(() => { screen.current = { view, flowType, customerView }; }, [view, flowType, customerView]);
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      signedInUserId.current = signedInUserId.current ?? data.session?.user?.id ?? null;
-      setCustomer(data.session?.user ?? null);
-    });
+    supabase.auth.getSession().then(({ data }) => setCustomer(data.session?.user ?? null));
     const { data: sub } = supabase.auth.onAuthStateChange((evt, s) => {
-      const previousUserId = signedInUserId.current;
-      signedInUserId.current = s?.user?.id ?? null;
       setCustomer(s?.user ?? null);
-      if (isNewSignIn(evt, previousUserId, signedInUserId.current)) {
-        // Supplier / admin sign-ins happen from the portal — leave them there;
-        // the supplier-resolution effect routes them. Customers go to My requests.
-        setView((v) => {
-          if (v !== "supplier") {
-            setFlowType(null);
-            setCustomerView("mine");
-          }
-          return v;
-        });
-      }
+      // After signing in, customers on a landing/sign-in screen go to My requests.
+      // Supplier / admin sign-ins stay in the portal (the supplier-resolution
+      // effect routes them); anyone mid-flow stays put. See lib/authEvents.
+      if (shouldGoToMyRequests(evt, screen.current)) setCustomerView("mine");
     });
     return () => sub.subscription.unsubscribe();
   }, []);
