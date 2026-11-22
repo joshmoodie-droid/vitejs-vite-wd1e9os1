@@ -4,11 +4,11 @@
 
 import { MessageCircleQuestion, ChevronRight } from "lucide-react";
 import { Badge } from "../ui";
-import { EnquiryThread } from "./EnquiryThread";
+import { EnquiryThread, type NextSteps } from "./EnquiryThread";
 import { INQUIRY_STATUS, isUnread, type Inquiry } from "../../lib/inquiries";
 
 export function MyEnquiries({
-  customerId, inquiries, loadError, openId, onOpen, onReload, onAsk,
+  customerId, inquiries, loadError, openId, onOpen, onReload, onAsk, nextSteps,
 }: {
   customerId: string;
   inquiries: Inquiry[] | null;
@@ -17,11 +17,12 @@ export function MyEnquiries({
   onOpen: (id: string | null) => void;
   onReload: () => void;
   onAsk: () => void;
+  nextSteps: NextSteps;
 }) {
   const open = inquiries?.find((i) => i.id === openId);
 
   if (open) {
-    return <EnquiryThread inquiry={open} userId={customerId} role="customer" onBack={() => onOpen(null)} onChanged={onReload} />;
+    return <EnquiryThread inquiry={open} userId={customerId} role="customer" onBack={() => onOpen(null)} onChanged={onReload} nextSteps={nextSteps} />;
   }
 
   return (
