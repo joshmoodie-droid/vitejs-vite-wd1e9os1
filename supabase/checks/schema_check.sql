@@ -20,6 +20,8 @@ select item, ok from (values
   ('0020 job log shows full price',                    exists (select 1 from pg_proc where proname = 'log_completed_job_to_register' and prosrc like '%v_extra%')),
   ('0021 commissions table',                           to_regclass('public.commissions') is not null),
   ('0021 supplier commission rates',                   to_regclass('public.supplier_commission') is not null),
-  ('0021 accepted job -> commission trigger',          exists (select 1 from pg_trigger where tgname = 'quotes_sync_commission'))
+  ('0021 accepted job -> commission trigger',          exists (select 1 from pg_trigger where tgname = 'quotes_sync_commission')),
+  ('0022 request_field_service_by_token function',     exists (select 1 from pg_proc where proname = 'request_field_service_by_token')),
+  ('0022 confirm_field_service_by_token function',     exists (select 1 from pg_proc where proname = 'confirm_field_service_by_token'))
 ) as checks(item, ok)
 order by item;

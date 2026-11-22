@@ -24,7 +24,11 @@ export function FieldServiceSection({ quote, requestFieldService, confirmFieldSe
         </div>
         <div className="flex gap-2">
           <button
-            onClick={() => { if (address) { requestFieldService(quote.id, address, notes, hours); setShowForm(false); } }}
+            onClick={async () => {
+              if (!address) return;
+              const sent = await requestFieldService(quote.id, address, notes, hours);
+              if (sent !== false) setShowForm(false); // on failure keep the form open so nothing typed is lost
+            }}
             className="flex-1 bg-orange-500 hover:bg-orange-600 text-black font-bold py-2.5 rounded-lg text-sm transition-colors"
           >
             Send request
