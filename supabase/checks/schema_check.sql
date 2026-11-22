@@ -22,6 +22,13 @@ select item, ok from (values
   ('0021 supplier commission rates',                   to_regclass('public.supplier_commission') is not null),
   ('0021 accepted job -> commission trigger',          exists (select 1 from pg_trigger where tgname = 'quotes_sync_commission')),
   ('0022 request_field_service_by_token function',     exists (select 1 from pg_proc where proname = 'request_field_service_by_token')),
-  ('0022 confirm_field_service_by_token function',     exists (select 1 from pg_proc where proname = 'confirm_field_service_by_token'))
+  ('0022 confirm_field_service_by_token function',     exists (select 1 from pg_proc where proname = 'confirm_field_service_by_token')),
+  ('0023 suppliers.takes_enquiries',                   exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'suppliers' and column_name = 'takes_enquiries')),
+  ('0023 inquiries table',                             to_regclass('public.inquiries') is not null),
+  ('0023 inquiry_messages table',                      to_regclass('public.inquiry_messages') is not null),
+  ('0023 create_inquiry function',                     exists (select 1 from pg_proc where proname = 'create_inquiry')),
+  ('0023 post_inquiry_message function',               exists (select 1 from pg_proc where proname = 'post_inquiry_message')),
+  ('0023 enquiry photos viewable by participants',     exists (select 1 from pg_proc where proname = 'can_view_photo' and prosrc like '%inquiry_messages%')),
+  ('0023 a supplier takes enquiries',                  exists (select 1 from public.suppliers where takes_enquiries))
 ) as checks(item, ok)
 order by item;
