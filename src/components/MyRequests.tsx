@@ -9,6 +9,8 @@ import { supabase } from "../supabaseClient";
 import { Badge } from "./ui";
 import { SaveToMachine } from "./machines/SaveToMachine";
 import { CustomerAudits } from "./audits/CustomerAudits";
+import { MyEnquiries } from "./enquiries/MyEnquiries";
+import { listMyInquiries, isUnread, type Inquiry } from "../lib/inquiries";
 import { assembliesFromRequest, listSavedRequestIds, type QuotePrefill } from "../lib/machines";
 
 const MY_REQ_STATUS = {
@@ -16,8 +18,19 @@ const MY_REQ_STATUS = {
   accepted: { label: "Accepted", tone: "orange" },
 };
 
-export function MyRequests({ customerId, email, onNew, onOrderAgain, onMachines }: any) {
+export function MyRequests({ customerId, email, onNew, onOrderAgain, onMachines, onAsk, initialTab, initialEnquiryId }: any) {
   const [rows, setRows] = useState(null);
+  // Quotes (requests and audits) | Enquiries ("Ask a supplier" threads)
+  const [tab, setTab] = useState<"quotes" | "enquiries">(initialTab === "enquiries" ? "enquiries" : "quotes");
+  const [inquiries, setInquiries] = useState<Inquiry[] | null>(null);
+  const [inquiriesError, setInquiriesError] = useState("");
+  const [openEnquiry, setOpenEnquiry] = useState<string | null>(initialEnquiryId ?? null);
+  const loadInquiries = () =>
+    listMyInquiries(customerId)
+      .then((l) => { setInquiries(l); setInquiriesError(""); })
+      .catch((e) => setInquiriesError(e instanceof Error ? e.message : String(e)));
+  useEffect(() => { loadInquiries(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [customerId]);
+  const unreadEnquiries = (inquiries || []).filter(isUnread).length;
   // request ids whose hoses are already in the register (linked at request
   // time, or saved here)
   const [inRegister, setInRegister] = useState(new Set());
@@ -62,6 +75,32 @@ export function MyRequests({ customerId, email, onNew, onOrderAgain, onMachines 
         </button>
       </div>
 
+      <div role="tablist" className="flex gap-1 bg-neutral-900 border border-neutral-800 rounded-lg p-1 mb-6">
+        {[
+          { key: "quotes", label: "Quotes" },
+          { key: "enquiries", label: "Enquiries" },
+        ].map((t) => (
+          <button
+            key={t.key} role="tab" aria-selected={tab === t.key}
+            onClick={() => { setTab(t.key as "quotes" | "enquiries"); if (t.key === "enquiries") setOpenEnquiry(null); }}
+            className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-semibold transition-colors ${tab === t.key ? "bg-orange-500 text-black" : "text-neutral-400 hover:text-white"}`}
+          >
+            {t.label}
+            {t.key === "enquiries" && unreadEnquiries > 0 && (
+              <span className={`text-xs rounded-full px-1.5 ${tab === t.key ? "bg-black/20" : "bg-orange-500 text-black"}`}>{unreadEnquiries}</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {tab === "enquiries" && (
+        <MyEnquiries
+          customerId={customerId} inquiries={inquiries} loadError={inquiriesError}
+          openId={openEnquiry} onOpen={setOpenEnquiry} onReload={loadInquiries} onAsk={onAsk}
+        />
+      )}
+
+      {tab === "quotes" && <>
       <CustomerAudits customerId={customerId} />
 
       {rows === null && <p className="text-neutral-500">Loading…</p>}
@@ -138,6 +177,7 @@ export function MyRequests({ customerId, email, onNew, onOrderAgain, onMachines 
           );
         })}
       </div>
+      </>}
     </div>
   );
 }
