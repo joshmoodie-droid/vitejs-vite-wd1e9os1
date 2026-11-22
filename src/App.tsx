@@ -84,24 +84,31 @@ export default function HoseQuoteApp() {
   const loadAll = useCallback(async (opts) => {
     if (!opts?.quiet) setLoading(true);
     try {
-      const { data: supRows } = await supabase.from("suppliers").select("*");
-      const sup = (supRows || []).map(supplierFromRow);
+      // HoseQuote fees: only an admin / the supplier get rows back (RLS), and
+      // anonymous visitors have no grant on those tables at all (a 401), so
+      // don't ask unless someone is signed in. getSession() reads local storage.
+      const { data: { session: authSession } } = await supabase.auth.getSession();
+      const noCommissions = { commissions: [], rates: {} };
 
-      const { data: pricingRows } = await supabase.from("supplier_pricing").select("*");
+      // None of these depend on each other, so fetch them together.
+      const [
+        { data: supRows }, { data: pricingRows }, { data: reqRows },
+        { data: quoteRows }, { data: connRows }, comm,
+      ] = await Promise.all([
+        supabase.from("suppliers").select("*"),
+        supabase.from("supplier_pricing").select("*"),
+        supabase.from("requests").select("*").order("created_at", { ascending: false }),
+        supabase.from("quotes").select("*").order("created_at", { ascending: false }),
+        supabase.from("connections").select("*"),
+        authSession ? loadCommissions().catch(() => noCommissions) : Promise.resolve(noCommissions),
+      ]);
+
+      const sup = (supRows || []).map(supplierFromRow);
       const pbs = {};
       (pricingRows || []).forEach((r) => { pbs[r.supplier_id] = pricingFromRow(r); });
-
-      const { data: reqRows } = await supabase.from("requests").select("*").order("created_at", { ascending: false });
       const req = (reqRows || []).map(requestFromRow);
-
-      const { data: quoteRows } = await supabase.from("quotes").select("*").order("created_at", { ascending: false });
       const qts = (quoteRows || []).map(quoteFromRow);
-
-      const { data: connRows } = await supabase.from("connections").select("*");
       const conns = (connRows || []).map(connectionFromRow);
-
-      // HoseQuote fees: only an admin / the supplier get rows back (RLS).
-      const comm = await loadCommissions().catch(() => ({ commissions: [], rates: {} }));
 
       setSuppliers(sup);
       setPricingBySupplier(pbs);
