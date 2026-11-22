@@ -3,12 +3,12 @@
 // the caller (App.tsx) and, underneath, by RLS on the tables.
 
 import { useEffect, useState } from "react";
-import { Plus, Tractor, ChevronRight } from "lucide-react";
+import { Plus, Tractor, ChevronRight, ClipboardCheck } from "lucide-react";
 import { MachineForm } from "./forms";
 import { MachineDetail } from "./MachineDetail";
 import { listMachines, createMachine, emptyMachine, type Machine, type QuotePrefill } from "../../lib/machines";
 
-export function MyMachines({ userId, email, onQuote }: { userId: string; email?: string; onQuote: (prefill: QuotePrefill) => void }) {
+export function MyMachines({ userId, email, onQuote, onBookAudit }: { userId: string; email?: string; onQuote: (prefill: QuotePrefill) => void; onBookAudit: () => void }) {
   const [machines, setMachines] = useState<Machine[] | null>(null);
   const [loadError, setLoadError] = useState("");
   const [adding, setAdding] = useState(false);
@@ -70,6 +70,24 @@ export function MyMachines({ userId, email, onQuote }: { userId: string; email?:
               setOpenId(created.id);
             }}
           />
+        </div>
+      )}
+
+      {!adding && (
+        <div className="mb-6 flex items-center gap-4 bg-neutral-900 border border-neutral-800 rounded-xl p-4">
+          <div className="w-10 h-10 shrink-0 rounded-lg bg-orange-500/10 border border-orange-500/40 flex items-center justify-center">
+            <ClipboardCheck className="w-5 h-5 text-orange-500" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-white font-bold">Hose audits</div>
+            <p className="text-neutral-500 text-sm">A supplier checks the hoses on your machines, photographs any of concern, and recommends what to replace.</p>
+          </div>
+          <button
+            onClick={onBookAudit}
+            className="shrink-0 border border-orange-500 text-orange-500 hover:bg-orange-500 hover:text-black font-bold px-4 py-2 rounded-lg text-sm transition-colors"
+          >
+            Book an audit
+          </button>
         </div>
       )}
 

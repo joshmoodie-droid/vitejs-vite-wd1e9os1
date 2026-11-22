@@ -8,16 +8,19 @@ import { Home, Tractor, ClipboardList, CircleUser, Building2, LogOut, ChevronRig
 export type MobileTab = "home" | "machines" | "requests" | "account" | "supplier";
 
 export function MobileNav({
-  active, showSupplier, onSelect,
+  active, showSupplier, signedIn, onSelect,
 }: {
   active: MobileTab;
   showSupplier: boolean; // suppliers / admins get their portal as a tab
+  signedIn: boolean; // Machines and Requests are for signed-in customers only
   onSelect: (tab: MobileTab) => void;
 }) {
   const tabs: { key: MobileTab; label: string; icon: typeof Home }[] = [
     { key: "home", label: "Home", icon: Home },
-    { key: "machines", label: "Machines", icon: Tractor },
-    { key: "requests", label: "Requests", icon: ClipboardList },
+    ...(signedIn ? [
+      { key: "machines" as const, label: "Machines", icon: Tractor },
+      { key: "requests" as const, label: "Requests", icon: ClipboardList },
+    ] : []),
     ...(showSupplier ? [{ key: "supplier" as const, label: "Supplier", icon: Building2 }] : []),
     { key: "account", label: "Account", icon: CircleUser },
   ];

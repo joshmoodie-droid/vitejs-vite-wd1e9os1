@@ -1,9 +1,15 @@
 // The "What do you need?" landing screen — pick quote vs. field-service.
-// Stateless. Extracted verbatim from App.tsx.
+// Stateless. Every card is the same size (auto-rows-fr) and the copy is kept
+// to a similar length, so a longer description can't make one card taller.
+// Machines and hose audits live behind the sign-in (Machines tab).
 
-import { Droplet, Wrench, Truck, Tractor, ClipboardCheck } from "lucide-react";
+import { Droplet, Wrench, Truck } from "lucide-react";
 
-export function FlowChooser({ onChoose, customer, onSignIn, onMine, onMachines }) {
+const card = "w-full h-full text-left bg-neutral-900 border border-neutral-800 hover:border-orange-500 rounded-xl p-6 transition-colors group";
+const iconBox = "w-12 h-12 rounded-lg bg-orange-500/10 border border-orange-500/40 flex items-center justify-center mb-4";
+const title = "text-white font-bold text-lg mb-1 group-hover:text-orange-500 transition-colors";
+
+export function FlowChooser({ onChoose, customer, onSignIn, onMine }) {
   return (
     <div>
       <div className="text-center mb-8">
@@ -14,53 +20,17 @@ export function FlowChooser({ onChoose, customer, onSignIn, onMine, onMachines }
         <p className="text-neutral-400 max-w-lg mx-auto">Get competing quotes on a hose assembly, or book a technician to come to you.</p>
       </div>
 
-      <div className="space-y-4">
-        <button
-          type="button"
-          onClick={() => onChoose("quote")}
-          className="w-full text-left bg-neutral-900 border border-neutral-800 hover:border-orange-500 rounded-xl p-6 transition-colors group"
-        >
-          <div className="w-12 h-12 rounded-lg bg-orange-500/10 border border-orange-500/40 flex items-center justify-center mb-4">
-            <Wrench className="w-6 h-6 text-orange-500" />
-          </div>
-          <div className="text-white font-bold text-lg mb-1 group-hover:text-orange-500 transition-colors">Get a Hose Quote</div>
-          <p className="text-neutral-500 text-sm">Specify your hose and fitting requirements and compare indicative prices from suppliers. On-site installation can be added as part of your quote.</p>
+      <div className="grid grid-cols-1 auto-rows-fr gap-4">
+        <button type="button" onClick={() => onChoose("quote")} className={card}>
+          <div className={iconBox}><Wrench className="w-6 h-6 text-orange-500" /></div>
+          <div className={title}>Get a Hose Quote</div>
+          <p className="text-neutral-500 text-sm">Compare indicative prices from suppliers for your hose and fittings, with on-site installation if you need it.</p>
         </button>
 
-        <button
-          type="button"
-          onClick={() => onChoose("booking")}
-          className="w-full text-left bg-neutral-900 border border-neutral-800 hover:border-orange-500 rounded-xl p-6 transition-colors group"
-        >
-          <div className="w-12 h-12 rounded-lg bg-orange-500/10 border border-orange-500/40 flex items-center justify-center mb-4">
-            <Truck className="w-6 h-6 text-orange-500" />
-          </div>
-          <div className="text-white font-bold text-lg mb-1 group-hover:text-orange-500 transition-colors">Book a Field Service Job</div>
-          <p className="text-neutral-500 text-sm">Not sure of the exact hose spec yet? Book a technician to come assess and fix it on site — describe the job and get indicative callout pricing.</p>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => onChoose("audit")}
-          className="w-full text-left bg-neutral-900 border border-neutral-800 hover:border-orange-500 rounded-xl p-6 transition-colors group"
-        >
-          <div className="w-12 h-12 rounded-lg bg-orange-500/10 border border-orange-500/40 flex items-center justify-center mb-4">
-            <ClipboardCheck className="w-6 h-6 text-orange-500" />
-          </div>
-          <div className="text-white font-bold text-lg mb-1 group-hover:text-orange-500 transition-colors">Book a Hose Audit</div>
-          <p className="text-neutral-500 text-sm">A supplier checks the hoses on your machines, photographs any of concern, and recommends what to replace now and what can wait.</p>
-        </button>
-
-        <button
-          type="button"
-          onClick={onMachines}
-          className="w-full text-left bg-neutral-900 border border-neutral-800 hover:border-orange-500 rounded-xl p-6 transition-colors group"
-        >
-          <div className="w-12 h-12 rounded-lg bg-orange-500/10 border border-orange-500/40 flex items-center justify-center mb-4">
-            <Tractor className="w-6 h-6 text-orange-500" />
-          </div>
-          <div className="text-white font-bold text-lg mb-1 group-hover:text-orange-500 transition-colors">My Machines</div>
-          <p className="text-neutral-500 text-sm">A free maintenance register: record each machine's hoses, checks and service history in one place.{customer ? "" : " Sign in to start."}</p>
+        <button type="button" onClick={() => onChoose("booking")} className={card}>
+          <div className={iconBox}><Truck className="w-6 h-6 text-orange-500" /></div>
+          <div className={title}>Book a Field Service Job</div>
+          <p className="text-neutral-500 text-sm">Not sure of the exact hose spec? A technician comes to you to assess and fix it on site, with indicative callout pricing.</p>
         </button>
       </div>
 
