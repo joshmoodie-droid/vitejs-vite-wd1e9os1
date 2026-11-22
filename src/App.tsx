@@ -16,6 +16,7 @@ import { FlowChooser } from "./components/FlowChooser";
 import { CustomerAuth, SupplierAuth, SupplierNotLinked } from "./components/auth";
 import { MyRequests } from "./components/MyRequests";
 import { MyMachines } from "./components/machines/MyMachines";
+import { AskSupplier } from "./components/enquiries/AskSupplier";
 import { AuditBooking } from "./components/audits/AuditBooking";
 import { SupplierPortal, AdminPortal } from "./components/portals";
 import { CustomerFlow, BookingFlow } from "./components/flows";
@@ -51,6 +52,9 @@ export default function HoseQuoteApp() {
   const [customer, setCustomer] = useState(null); // Supabase auth user
   const [profile, setProfile] = useState(null);
   const [customerView, setCustomerView] = useState(initialCustomerView); // "new" | "auth" | "mine" | "machines" | "account"
+  // Where My requests opens: set after sending an enquiry so the customer lands on its thread.
+  const [mineStart, setMineStart] = useState(null); // { tab, enquiryId } | null
+  useEffect(() => { if (customerView !== "mine") setMineStart(null); }, [customerView]);
 
   const [step, setStep] = useState(1);
   const [form, setForm] = useState(emptyForm());
@@ -652,6 +656,9 @@ export default function HoseQuoteApp() {
               onNew={() => setCustomerView("new")}
               onOrderAgain={startPrefilledQuote}
               onMachines={() => setCustomerView("machines")}
+              onAsk={() => setFlowType("enquiry")}
+              initialTab={mineStart?.tab}
+              initialEnquiryId={mineStart?.enquiryId}
             />
           ) : (
             <CustomerAuth
@@ -682,6 +689,17 @@ export default function HoseQuoteApp() {
             onBack={() => setFlowType(null)}
             customer={customer}
           />
+        )}
+        {view === "customer" && flowType === "enquiry" && (
+          customer ? (
+            <AskSupplier
+              userId={customer.id}
+              onBack={() => setFlowType(null)}
+              onSent={(id) => { setMineStart({ tab: "enquiries", enquiryId: id }); setFlowType(null); setCustomerView("mine"); window.scrollTo(0, 0); }}
+            />
+          ) : (
+            <CustomerAuth onBack={() => setFlowType(null)} />
+          )
         )}
         {view === "customer" && flowType === "audit" && (
           <AuditBooking

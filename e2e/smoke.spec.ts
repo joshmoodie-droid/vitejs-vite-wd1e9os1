@@ -4,7 +4,7 @@ import { test, expect } from "@playwright/test";
 // against the staging Supabase project (never production); the full
 // submit -> quote -> accept flow is intentionally out of scope here.
 
-test("home page shows the two main cards and nothing behind the login", async ({ page }) => {
+test("home page shows the three main cards and nothing behind the login", async ({ page }) => {
   await page.goto("/");
   await expect(
     page.getByRole("heading", { name: "What do you need?" }),
@@ -15,9 +15,22 @@ test("home page shows the two main cards and nothing behind the login", async ({
   await expect(
     page.getByRole("button", { name: /Book a Field Service Job/ }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Ask a supplier/ }),
+  ).toBeVisible();
   // Machines and hose audits live behind the sign-in, not on the public home.
   await expect(page.getByRole("button", { name: /My Machines/i })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /Book a Hose Audit/i })).toHaveCount(0);
+});
+
+test("Ask a supplier asks a signed-out visitor to sign in straight away", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: /Ask a supplier/ }).click();
+  await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+  await expect(page.getByPlaceholder("you@example.com")).toBeVisible();
+  // Back returns to the home cards.
+  await page.getByRole("button", { name: "Back" }).click();
+  await expect(page.getByRole("heading", { name: "What do you need?" })).toBeVisible();
 });
 
 test("quote wizard opens and step 1 renders + takes input", async ({ page }) => {

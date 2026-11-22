@@ -1,9 +1,11 @@
 // The "What do you need?" landing screen — pick quote vs. field-service.
 // Stateless. Every card is the same size (auto-rows-fr) and the copy is kept
 // to a similar length, so a longer description can't make one card taller.
-// Machines and hose audits live behind the sign-in (Machines tab).
+// Machines and hose audits live behind the sign-in (Machines tab). "Ask a
+// supplier" is open to everyone on the home screen; tapping it while signed out
+// goes straight to sign-in (App.tsx).
 
-import { Droplet, Wrench, Truck } from "lucide-react";
+import { Droplet, Wrench, Truck, MessageCircleQuestion } from "lucide-react";
 
 const card = "w-full h-full text-left bg-neutral-900 border border-neutral-800 hover:border-orange-500 rounded-xl p-6 transition-colors group";
 const iconBox = "w-12 h-12 rounded-lg bg-orange-500/10 border border-orange-500/40 flex items-center justify-center mb-4";
@@ -17,7 +19,7 @@ export function FlowChooser({ onChoose, customer, onSignIn, onMine }) {
           <Droplet className="w-3.5 h-3.5" /> Hydraulic Hose Service
         </div>
         <h1 className="text-3xl md:text-4xl font-extrabold text-white mb-2">What do you need?</h1>
-        <p className="text-neutral-400 max-w-lg mx-auto">Get competing quotes on a hose assembly, or book a technician to come to you.</p>
+        <p className="text-neutral-400 max-w-lg mx-auto">Get competing quotes on a hose assembly, book a technician to come to you, or ask a supplier.</p>
       </div>
 
       <div className="grid grid-cols-1 auto-rows-fr gap-4">
@@ -31,6 +33,12 @@ export function FlowChooser({ onChoose, customer, onSignIn, onMine }) {
           <div className={iconBox}><Truck className="w-6 h-6 text-orange-500" /></div>
           <div className={title}>Book a Field Service Job</div>
           <p className="text-neutral-500 text-sm">Not sure of the exact hose spec? A technician comes to you to assess and fix it on site, with indicative callout pricing.</p>
+        </button>
+
+        <button type="button" onClick={() => onChoose("enquiry")} className={card}>
+          <div className={iconBox}><MessageCircleQuestion className="w-6 h-6 text-orange-500" /></div>
+          <div className={title}>Ask a supplier</div>
+          <p className="text-neutral-500 text-sm">Not sure what you need? Describe it, add photos, and a supplier will recommend a fix.</p>
         </button>
       </div>
 
