@@ -4,7 +4,7 @@ import { test, expect } from "@playwright/test";
 // against the staging Supabase project (never production); the full
 // submit -> quote -> accept flow is intentionally out of scope here.
 
-test("home page shows both entry points", async ({ page }) => {
+test("home page shows the two main cards and nothing behind the login", async ({ page }) => {
   await page.goto("/");
   await expect(
     page.getByRole("heading", { name: "What do you need?" }),
@@ -15,6 +15,9 @@ test("home page shows both entry points", async ({ page }) => {
   await expect(
     page.getByRole("button", { name: /Book a Field Service Job/ }),
   ).toBeVisible();
+  // Machines and hose audits live behind the sign-in, not on the public home.
+  await expect(page.getByRole("button", { name: /My Machines/i })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Book a Hose Audit/i })).toHaveCount(0);
 });
 
 test("quote wizard opens and step 1 renders + takes input", async ({ page }) => {
@@ -41,13 +44,10 @@ test("booking wizard opens", async ({ page }) => {
   await expect(page.getByText(/Step 1 of 3/)).toBeVisible();
 });
 
-test("maintenance register asks a signed-out visitor to sign in", async ({
+test("maintenance register link asks a signed-out visitor to sign in", async ({
   page,
 }) => {
-  await page.goto("/");
-  await page
-    .getByRole("button", { name: /My Machines.*maintenance register/i })
-    .click();
+  await page.goto("/machines");
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
   await expect(page.getByPlaceholder("you@example.com")).toBeVisible();
 });
@@ -78,7 +78,7 @@ test.describe("phone", () => {
   test("bottom tab bar navigates and the header stays clean", async ({ page }) => {
     await page.goto("/");
     const nav = page.getByRole("navigation", { name: "Main" });
-    await expect(nav.getByRole("button")).toHaveText(["Home", "Machines", "Requests", "Account"]);
+    await expect(nav.getByRole("button")).toHaveText(["Home", "Account"]); // Machines and Requests appear once signed in
     await expect(page.locator("header button:visible")).toHaveCount(0);
     await nav.getByRole("button", { name: "Account" }).click();
     await expect(page.getByRole("heading", { name: "Account" })).toBeVisible();

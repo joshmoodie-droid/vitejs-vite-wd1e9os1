@@ -222,6 +222,7 @@ export default function HoseQuoteApp() {
   const supplierTab = isAdmin || !!session;
   const mobileTab =
     view === "supplier" ? (supplierTab ? "supplier" : "account")
+      : flowType === "audit" ? "machines" // audits are booked from the Machines page
       : flowType !== null ? "home"
       : customerView === "machines" ? "machines"
       : customerView === "mine" ? "requests"
@@ -630,7 +631,6 @@ export default function HoseQuoteApp() {
             customer={customer}
             onSignIn={() => setCustomerView("auth")}
             onMine={() => setCustomerView("mine")}
-            onMachines={() => setCustomerView("machines")}
           />
         )}
         {view === "customer" && flowType === null && customerView === "account" && (
@@ -662,7 +662,7 @@ export default function HoseQuoteApp() {
         )}
         {view === "customer" && flowType === null && customerView === "machines" && (
           customer ? (
-            <MyMachines userId={customer.id} email={customer.email} onQuote={startPrefilledQuote} />
+            <MyMachines userId={customer.id} email={customer.email} onQuote={startPrefilledQuote} onBookAudit={() => setFlowType("audit")} />
           ) : (
             <CustomerAuth
               onSignedIn={() => setCustomerView("machines")}
@@ -789,7 +789,7 @@ export default function HoseQuoteApp() {
         )}
       </main>
 
-      <MobileNav active={mobileTab} showSupplier={supplierTab} onSelect={goTab} />
+      <MobileNav active={mobileTab} showSupplier={supplierTab} signedIn={!!customer} onSelect={goTab} />
     </div>
   );
 }
