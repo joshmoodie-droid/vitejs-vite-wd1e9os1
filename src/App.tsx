@@ -365,6 +365,22 @@ export default function HoseQuoteApp() {
     window.scrollTo(0, 0);
   };
 
+  // Same idea for a field service booking started from an enquiry.
+  const startPrefilledBooking = (prefill) => {
+    setBookingForm({
+      ...emptyBookingForm(),
+      name: profile?.full_name || "",
+      phone: profile?.phone || "",
+      email: profile?.email || customer?.email || "",
+      ...prefill,
+    });
+    setBookingStep(1);
+    setBookingErrors({});
+    setBookingSubmittedRequestId(null);
+    setFlowType("booking");
+    window.scrollTo(0, 0);
+  };
+
   const confirmQuote = async (quoteId, overrides) => {
     const row = {};
     if (overrides.priceLow !== undefined) row.price_low = overrides.priceLow;
@@ -659,6 +675,8 @@ export default function HoseQuoteApp() {
               onOrderAgain={startPrefilledQuote}
               onMachines={() => setCustomerView("machines")}
               onAsk={() => setFlowType("enquiry")}
+              onBookingFromEnquiry={startPrefilledBooking}
+              onAuditFromEnquiry={() => setFlowType("audit")}
               initialTab={mineStart?.tab}
               initialEnquiryId={mineStart?.enquiryId}
             />

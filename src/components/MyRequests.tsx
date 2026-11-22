@@ -18,7 +18,7 @@ const MY_REQ_STATUS = {
   accepted: { label: "Accepted", tone: "orange" },
 };
 
-export function MyRequests({ customerId, email, onNew, onOrderAgain, onMachines, onAsk, initialTab, initialEnquiryId }: any) {
+export function MyRequests({ customerId, email, onNew, onOrderAgain, onMachines, onAsk, onBookingFromEnquiry, onAuditFromEnquiry, initialTab, initialEnquiryId }: any) {
   const [rows, setRows] = useState(null);
   // Quotes (requests and audits) | Enquiries ("Ask a supplier" threads)
   const [tab, setTab] = useState<"quotes" | "enquiries">(initialTab === "enquiries" ? "enquiries" : "quotes");
@@ -97,6 +97,7 @@ export function MyRequests({ customerId, email, onNew, onOrderAgain, onMachines,
         <MyEnquiries
           customerId={customerId} inquiries={inquiries} loadError={inquiriesError}
           openId={openEnquiry} onOpen={setOpenEnquiry} onReload={loadInquiries} onAsk={onAsk}
+          nextSteps={{ quote: onOrderAgain, booking: onBookingFromEnquiry, audit: onAuditFromEnquiry }}
         />
       )}
 

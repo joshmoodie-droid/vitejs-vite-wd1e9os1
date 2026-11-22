@@ -4,7 +4,7 @@
 // new messages.
 
 import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, RefreshCw } from "lucide-react";
+import { ArrowLeft, RefreshCw, Wrench, Truck, ClipboardCheck } from "lucide-react";
 import { Badge, inputClass } from "../ui";
 import { PhotoStrip } from "../photos/PhotoStrip";
 import { PhotoUploader } from "../photos/PhotoUploader";
@@ -13,14 +13,32 @@ import {
   type Inquiry, type InquiryMessage, type InquiryRole,
 } from "../../lib/inquiries";
 
+// Where an enquiry can lead. The customer's side opens the existing forms with
+// what they already told the supplier filled in; nothing is created until they
+// submit that form as usual.
+export interface NextSteps {
+  quote: (prefill: { location: string; machineId: string; notes: string }) => void;
+  booking: (prefill: { location: string; description: string; notes: string }) => void;
+  audit: () => void;
+}
+
+// Suggestions a supplier can drop into the reply box (and edit before sending).
+// They point at the buttons the customer sees under the thread.
+const SUGGESTIONS = [
+  { label: "Suggest a hose quote", text: "Thanks for the details. I'd suggest getting a hose quote so we can price the right assemblies for you. Tap \"Get a hose quote\" below and your details will be filled in." },
+  { label: "Suggest an on-site visit", text: "From what you've described, it sounds best for a technician to look at it on site. Tap \"Book a field service job\" below to arrange a time." },
+  { label: "Suggest a hose audit", text: "It would be worth checking the other hoses on the machine while we're at it. Tap \"Book a hose audit\" below and we'll go through them." },
+];
+
 export function EnquiryThread({
-  inquiry, userId, role, onBack, onChanged,
+  inquiry, userId, role, onBack, onChanged, nextSteps,
 }: {
   inquiry: Inquiry;
   userId: string;
   role: InquiryRole;
   onBack: () => void;
   onChanged: () => void; // the list should reload (status / unread changed)
+  nextSteps?: NextSteps; // customer side only
 }) {
   const [messages, setMessages] = useState<InquiryMessage[] | null>(null);
   const [loadError, setLoadError] = useState("");
@@ -52,6 +70,9 @@ export function EnquiryThread({
   const closed = inquiry.status === "closed";
   const meta = INQUIRY_STATUS[inquiry.status];
   const otherName = role === "customer" ? inquiry.supplierName : inquiry.customerName;
+  const firstCustomerBody = messages?.find((m) => m.sender === "customer")?.body ?? "";
+  const supplierHasReplied = !!messages?.some((m) => m.sender === "supplier");
+  const note = `Re my enquiry: ${inquiry.subject}`;
 
   const send = async () => {
     if (!reply.trim()) { setActionError("Write a message first."); return; }
@@ -119,6 +140,27 @@ export function EnquiryThread({
         })}
       </div>
 
+      {role === "customer" && nextSteps && !closed && supplierHasReplied && (
+        <div className="mb-6 rounded-xl border border-orange-500/30 bg-orange-500/5 p-4">
+          <div className="text-white font-bold mb-1">Ready for the next step?</div>
+          <p className="text-neutral-400 text-sm mb-3">These open the usual forms with what you've told the supplier filled in. Nothing is sent until you submit.</p>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <button type="button" onClick={() => nextSteps.quote({ location: inquiry.location, machineId: inquiry.machineId ?? "", notes: note })}
+              className="flex-1 flex items-center justify-center gap-2 border border-orange-500 text-orange-500 hover:bg-orange-500 hover:text-black font-bold px-4 py-2.5 rounded-lg text-sm transition-colors">
+              <Wrench className="w-4 h-4" /> Get a hose quote
+            </button>
+            <button type="button" onClick={() => nextSteps.booking({ location: inquiry.location, description: firstCustomerBody.slice(0, 500), notes: note })}
+              className="flex-1 flex items-center justify-center gap-2 border border-orange-500 text-orange-500 hover:bg-orange-500 hover:text-black font-bold px-4 py-2.5 rounded-lg text-sm transition-colors">
+              <Truck className="w-4 h-4" /> Book a field service job
+            </button>
+            <button type="button" onClick={() => nextSteps.audit()}
+              className="flex-1 flex items-center justify-center gap-2 border border-orange-500 text-orange-500 hover:bg-orange-500 hover:text-black font-bold px-4 py-2.5 rounded-lg text-sm transition-colors">
+              <ClipboardCheck className="w-4 h-4" /> Book a hose audit
+            </button>
+          </div>
+        </div>
+      )}
+
       {closed ? (
         <p className="text-center text-sm text-neutral-500 border border-dashed border-neutral-800 rounded-xl py-6">
           {role === "customer"
@@ -127,6 +169,16 @@ export function EnquiryThread({
         </p>
       ) : (
         <div>
+          {role === "supplier" && (
+            <div className="flex flex-wrap gap-2 mb-3">
+              {SUGGESTIONS.map((s) => (
+                <button key={s.label} type="button" onClick={() => setReply(s.text)}
+                  className="text-xs font-semibold text-neutral-300 hover:text-white border border-neutral-700 hover:border-orange-500 rounded-full px-3 py-1.5 transition-colors">
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          )}
           <textarea
             className={inputClass()} rows={3} value={reply} maxLength={4000}
             onChange={(e) => setReply(e.target.value)} placeholder="Write a reply…"
