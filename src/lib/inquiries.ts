@@ -2,11 +2,14 @@
 // to 3 photos per message) and a supplier replies with a way forward.
 // The tables are read-only to the browser; every write goes through the
 // SECURITY DEFINER functions in supabase/migrations/0023_enquiries.sql, which
-// also decide which supplier receives the enquiry.
+// also decide which supplier receives the enquiry. Each write says which side
+// it acts as ("customer" or "supplier"); the server checks the caller really
+// may, so the owner (who is both) can use either.
 
 import { supabase } from "../supabaseClient";
 
 export type InquiryStatus = "open" | "replied" | "quote_sent" | "closed";
+export type InquiryRole = "customer" | "supplier";
 
 export interface Inquiry {
   id: string;
@@ -15,14 +18,16 @@ export interface Inquiry {
   location: string;
   machineId: string | null;
   supplierName: string;
+  customerName: string;
   createdAt: string;
   lastMessageAt: string;
   customerReadAt: string | null;
+  supplierReadAt: string | null;
 }
 
 export interface InquiryMessage {
   id: string;
-  sender: "customer" | "supplier";
+  sender: InquiryRole;
   body: string;
   photos: string[];
   createdAt: string;
@@ -35,10 +40,11 @@ export const INQUIRY_STATUS: Record<InquiryStatus, { label: string; tone: string
   closed: { label: "Closed", tone: "neutral" },
 };
 
-// A reply the customer hasn't opened yet. Posting a message or opening the
-// thread stamps customer_read_at to the same instant as last_message_at.
-export function isUnread(i: Inquiry): boolean {
-  return i.status !== "closed" && (!i.customerReadAt || i.customerReadAt < i.lastMessageAt);
+// Something the reader hasn't opened yet. Posting a message or opening the
+// thread stamps that side's read time to the same instant as last_message_at.
+export function isUnread(i: Inquiry, role: InquiryRole): boolean {
+  const readAt = role === "customer" ? i.customerReadAt : i.supplierReadAt;
+  return i.status !== "closed" && (!readAt || readAt < i.lastMessageAt);
 }
 
 type Row = Record<string, any>;
@@ -51,9 +57,11 @@ function inquiryFromRow(r: Row): Inquiry {
     location: r.location ?? "",
     machineId: r.machine_id ?? null,
     supplierName: r.suppliers?.company_name ?? "Supplier",
+    customerName: r.customer_name ?? "Customer",
     createdAt: r.created_at,
     lastMessageAt: r.last_message_at,
     customerReadAt: r.customer_read_at ?? null,
+    supplierReadAt: r.supplier_read_at ?? null,
   };
 }
 
@@ -67,12 +75,26 @@ function messageFromRow(r: Row): InquiryMessage {
   };
 }
 
+const COLUMNS =
+  "id, subject, status, location, machine_id, customer_name, created_at, last_message_at, customer_read_at, supplier_read_at, suppliers(company_name)";
+
 // An admin can read every enquiry, so always filter to the signed-in customer's own.
 export async function listMyInquiries(customerId: string): Promise<Inquiry[]> {
   const { data, error } = await supabase
     .from("inquiries")
-    .select("id, subject, status, location, machine_id, created_at, last_message_at, customer_read_at, suppliers(company_name)")
+    .select(COLUMNS)
     .eq("customer_id", customerId)
+    .order("last_message_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map(inquiryFromRow);
+}
+
+// Supplier / admin side: row-level security returns the supplier's own
+// enquiries, or all of them for an admin.
+export async function listSupplierInquiries(): Promise<Inquiry[]> {
+  const { data, error } = await supabase
+    .from("inquiries")
+    .select(COLUMNS)
     .order("last_message_at", { ascending: false });
   if (error) throw new Error(error.message);
   return (data ?? []).map(inquiryFromRow);
@@ -107,10 +129,10 @@ export async function createInquiry(input: {
   return data as string;
 }
 
-export async function postCustomerMessage(inquiryId: string, body: string, photos: string[]): Promise<void> {
+export async function postMessage(inquiryId: string, role: InquiryRole, body: string, photos: string[]): Promise<void> {
   const { data, error } = await supabase.rpc("post_inquiry_message", {
     p_inquiry_id: inquiryId,
-    p_as: "customer",
+    p_as: role,
     p_body: body,
     p_photos: photos,
   });
@@ -118,12 +140,12 @@ export async function postCustomerMessage(inquiryId: string, body: string, photo
   if (!data) throw new Error("Your message wasn't saved — please try again.");
 }
 
-export async function markInquiryRead(inquiryId: string): Promise<void> {
-  const { error } = await supabase.rpc("mark_inquiry_read", { p_inquiry_id: inquiryId, p_as: "customer" });
+export async function markInquiryRead(inquiryId: string, role: InquiryRole): Promise<void> {
+  const { error } = await supabase.rpc("mark_inquiry_read", { p_inquiry_id: inquiryId, p_as: role });
   if (error) throw new Error(error.message);
 }
 
-export async function closeInquiry(inquiryId: string): Promise<void> {
-  const { error } = await supabase.rpc("close_inquiry", { p_inquiry_id: inquiryId, p_as: "customer" });
+export async function closeInquiry(inquiryId: string, role: InquiryRole): Promise<void> {
+  const { error } = await supabase.rpc("close_inquiry", { p_inquiry_id: inquiryId, p_as: role });
   if (error) throw new Error(error.message);
 }

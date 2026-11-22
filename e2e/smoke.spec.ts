@@ -65,6 +65,13 @@ test("maintenance register link asks a signed-out visitor to sign in", async ({
   await expect(page.getByPlaceholder("you@example.com")).toBeVisible();
 });
 
+test("enquiry email links ask a signed-out visitor to sign in", async ({ page }) => {
+  await page.goto("/enquiries/00000000-0000-0000-0000-000000000000");
+  await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+  await page.goto("/supplier/enquiries");
+  await expect(page.getByRole("heading", { name: "Supplier Portal" })).toBeVisible();
+});
+
 test("/supplier shows the supplier sign-in", async ({ page }) => {
   await page.goto("/supplier");
   await expect(

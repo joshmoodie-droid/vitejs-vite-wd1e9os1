@@ -3,16 +3,33 @@
 // RequestCard / JobQuoteCard lists; AdminPortal also hosts AdminSuppliers.
 
 import { useState } from "react";
-import { LogOut, Wrench, Settings, Building2, ClipboardCheck, BadgePercent } from "lucide-react";
+import { LogOut, Wrench, Settings, Building2, ClipboardCheck, BadgePercent, MessageCircleQuestion } from "lucide-react";
 import { RequestCard, JobQuoteCard } from "./portalCards";
 import { PricingAdmin } from "./PricingAdmin";
 import { AdminSuppliers } from "./AdminSuppliers";
 import { SupplierAudits } from "./audits/SupplierAudits";
 import { CommissionAdmin } from "./CommissionAdmin";
+import { SupplierEnquiries } from "./enquiries/SupplierEnquiries";
+import { useSupplierInquiries } from "./enquiries/useSupplierInquiries";
+import { isUnread } from "../lib/inquiries";
+import { currentRoute } from "../lib/routes";
 import { dollars, percent, rateFor } from "../lib/commission";
 
+// An email link to /supplier/enquiries[/:id] opens the portal on that tab.
+function enquiryLink() {
+  const r = currentRoute();
+  return r.name === "supplier" && r.tab === "enquiries" ? r : null;
+}
+
+// Tab label with a count of enquiries waiting on the supplier.
+function TabLabel({ label, count }: { label: string; count?: number }) {
+  return <>{label}{count ? <span className="text-xs rounded-full px-1.5 bg-orange-500 text-black">{count}</span> : null}</>;
+}
+
 export function SupplierPortal({ supplier, authUserId, onLogout, requests, quotes, connections, commissions = [], commissionRates = {}, pricing, onSavePricing, onSubmitManualQuote, onUnlock, onConfirmQuote, onRejectQuote, onUpdateFieldService, onMarkComplete, onReload }: any) {
-  const [tab, setTab] = useState("jobs");
+  const [tab, setTab] = useState(enquiryLink() ? "enquiries" : "jobs");
+  const enquiries = useSupplierInquiries();
+  const unreadEnquiries = (enquiries.inquiries || []).filter((i) => isUnread(i, "supplier")).length;
   const [jobType, setJobType] = useState("quotes"); // "quotes" = hose assembly, "field" = field service jobs
   const [stage, setStage] = useState("new");
   const myQuotes = quotes.filter((q) => q.supplierId === supplier.id);
@@ -61,10 +78,11 @@ export function SupplierPortal({ supplier, authUserId, onLogout, requests, quote
         {[
           { key: "jobs", label: "Jobs", icon: Wrench },
           { key: "audits", label: "Audits", icon: ClipboardCheck },
+          { key: "enquiries", label: "Enquiries", icon: MessageCircleQuestion, count: unreadEnquiries },
           { key: "pricing", label: "Pricing", icon: Settings },
         ].map((t) => (
-          <button key={t.key} onClick={() => setTab(t.key)} className={`flex-1 py-2 rounded-md font-semibold text-sm transition-colors flex items-center justify-center gap-1.5 ${tab === t.key ? "bg-orange-500 text-black" : "text-neutral-400"}`}>
-            <t.icon className="w-4 h-4" /> {t.label}
+          <button key={t.key} onClick={() => setTab(t.key)} className={`flex-1 min-w-0 py-2 rounded-md font-semibold text-xs sm:text-sm transition-colors flex items-center justify-center gap-1.5 ${tab === t.key ? "bg-orange-500 text-black" : "text-neutral-400"}`}>
+            <t.icon className="w-4 h-4 shrink-0 hidden sm:block" /> <TabLabel label={t.label} count={t.count} />
           </button>
         ))}
       </div>
@@ -153,6 +171,10 @@ export function SupplierPortal({ supplier, authUserId, onLogout, requests, quote
 
       {tab === "audits" && <SupplierAudits supplierId={supplier.id} userId={authUserId} pricing={pricing} onQuoteCreated={onReload} />}
 
+      {tab === "enquiries" && (
+        <SupplierEnquiries userId={authUserId} inquiries={enquiries.inquiries} loadError={enquiries.error} onReload={enquiries.reload} initialOpenId={enquiryLink()?.enquiryId ?? null} />
+      )}
+
       {tab === "pricing" && <PricingAdmin pricing={pricing} onSave={onSavePricing} />}
     </div>
   );
@@ -163,7 +185,9 @@ export function AdminPortal({
   onSavePricing, onSubmitManualQuote, onUnlock, onConfirmQuote, onRejectQuote, onUpdateFieldService, onMarkComplete, onEditQuote, onReload,
   onAddSupplier, onUpdateSupplier, onDeleteSupplier,
 }: any) {
-  const [tab, setTab] = useState("jobs");
+  const [tab, setTab] = useState(enquiryLink() ? "enquiries" : "jobs");
+  const enquiries = useSupplierInquiries();
+  const unreadEnquiries = (enquiries.inquiries || []).filter((i) => isUnread(i, "supplier")).length;
   const [jobType, setJobType] = useState("quotes");
   const [stage, setStage] = useState("new");
 
@@ -206,17 +230,22 @@ export function AdminPortal({
         {[
           { key: "jobs", label: "Jobs", icon: Wrench },
           { key: "audits", label: "Audits", icon: ClipboardCheck },
+          { key: "enquiries", label: "Enquiries", icon: MessageCircleQuestion, count: unreadEnquiries },
           { key: "suppliers", label: "Suppliers", icon: Building2 },
           { key: "commission", label: "Commission", icon: BadgePercent },
         ].map((t) => (
           <button key={t.key} onClick={() => setTab(t.key)} className={`flex-1 min-w-0 py-2 rounded-md font-semibold text-xs sm:text-sm transition-colors flex items-center justify-center gap-1.5 ${tab === t.key ? "bg-orange-500 text-black" : "text-neutral-400"}`}>
-            <t.icon className="w-4 h-4 shrink-0 hidden sm:block" /> {t.label}
+            <t.icon className="w-4 h-4 shrink-0 hidden sm:block" /> <TabLabel label={t.label} count={t.count} />
           </button>
         ))}
       </div>
 
       {tab === "audits" && (
         <SupplierAudits userId={authUserId} suppliers={suppliers} pricingBySupplier={pricingBySupplier} onQuoteCreated={onReload} />
+      )}
+
+      {tab === "enquiries" && (
+        <SupplierEnquiries userId={authUserId} inquiries={enquiries.inquiries} loadError={enquiries.error} onReload={enquiries.reload} showSupplier initialOpenId={enquiryLink()?.enquiryId ?? null} />
       )}
 
       {tab === "commission" && (

@@ -1,6 +1,7 @@
 // Supabase Edge Function: notify
 // -------------------------------------------------------------------
-// Fired by Database Webhooks on the `requests` and `quotes` tables.
+// Fired by Database Webhooks on the `requests`, `quotes` and
+// `inquiry_messages` tables.
 // Diffs the row change, decides which transactional emails to send,
 // and sends them through Resend. Every email carries a link back to
 // the app.
@@ -82,6 +83,10 @@ const shell = (heading: string, body: string, cta?: { label: string; url: string
     </p>` : ""}
     <p style="font-size:12px;color:#888;margin-top:28px">HoseQuote — hydraulic hose service</p>
   </div>`;
+
+// Customer-written text goes into emails, so escape it.
+const esc = (s: unknown) =>
+  String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 const money = (lo: number, hi: number) => `$${lo}${hi != null && hi !== lo ? ` – $${hi}` : ""}`;
 
@@ -295,6 +300,46 @@ async function onFieldServiceQuoted(quote: any) {
   );
 }
 
+// Ask a supplier (enquiries). A customer message emails the supplier taking
+// enquiries; a supplier reply emails the customer. The email shows the message
+// and links to the thread — the customer's own email address and phone are
+// never put in the supplier's email.
+async function onInquiryMessage(msg: any) {
+  const { data: inquiry } = await admin.from("inquiries").select("*").eq("id", msg.inquiry_id).single();
+  if (!inquiry) return;
+  const supplier = await getSupplier(inquiry.supplier_id);
+
+  const excerpt = esc(String(msg.body ?? "").slice(0, 600)).replace(/\n/g, "<br>");
+  const nPhotos = Array.isArray(msg.photos) ? msg.photos.length : 0;
+  const photoLine = nPhotos ? `<p style="color:#666">${nPhotos} photo${nPhotos === 1 ? "" : "s"} attached — open the enquiry to see ${nPhotos === 1 ? "it" : "them"}.</p>` : "";
+  const quoted = `<blockquote style="margin:12px 0;padding:8px 14px;border-left:3px solid #f97316;background:#fafafa">${excerpt}</blockquote>${photoLine}`;
+
+  if (msg.sender === "customer") {
+    const { count } = await admin.from("inquiry_messages").select("id", { count: "exact", head: true }).eq("inquiry_id", msg.inquiry_id);
+    const isFirst = (count ?? 0) <= 1;
+    await sendEmail(
+      supplier?.contact_email,
+      `${isFirst ? "New enquiry" : "New message on an enquiry"} — ${inquiry.subject}`,
+      shell(
+        isFirst ? "A customer has asked for help" : "A customer replied to an enquiry",
+        `<b>${esc(inquiry.customer_name)}</b>${inquiry.location ? ` (${esc(inquiry.location)})` : ""} wrote about <b>${esc(inquiry.subject)}</b>:${quoted}`,
+        { label: "Open the enquiry", url: `${APP_URL}/supplier/enquiries/${inquiry.id}` },
+      ),
+    );
+  } else if (msg.sender === "supplier") {
+    const { data: user } = await admin.auth.admin.getUserById(inquiry.customer_id);
+    await sendEmail(
+      user?.user?.email,
+      `${supplier?.company_name ?? "A supplier"} replied to your enquiry — ${inquiry.subject}`,
+      shell(
+        "You have a reply",
+        `<b>${esc(supplier?.company_name ?? "A supplier")}</b> replied about <b>${esc(inquiry.subject)}</b>:${quoted}`,
+        { label: "View and reply", url: `${APP_URL}/enquiries/${inquiry.id}` },
+      ),
+    );
+  }
+}
+
 // ---------- webhook entrypoint ----------
 
 Deno.serve(async (req) => {
@@ -311,6 +356,8 @@ Deno.serve(async (req) => {
   try {
     if (table === "requests" && type === "INSERT") {
       await onRequestCreated(record);
+    } else if (table === "inquiry_messages" && type === "INSERT") {
+      await onInquiryMessage(record);
     } else if (table === "quotes" && type === "UPDATE") {
       // assumes the webhook sends a full old_record (REPLICA IDENTITY FULL),
       // same as the quote-status path already relies on
@@ -329,7 +376,7 @@ Deno.serve(async (req) => {
     Sentry.captureException(e, {
       tags: { table, type },
       // ids like HQ-xxx / quote ids — not PII
-      extra: { record_id: record?.id, request_id: record?.request_id },
+      extra: { record_id: record?.id, request_id: record?.request_id, inquiry_id: record?.inquiry_id },
     });
   } finally {
     // the runtime can freeze the isolate right after we respond, so make sure

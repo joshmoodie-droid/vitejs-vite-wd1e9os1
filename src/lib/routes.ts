@@ -7,8 +7,11 @@ export type Route =
   | { name: "request"; requestId: string; token: string | null }
   // Hose audit report from the customer's email: /a/:auditId?t=:token
   | { name: "audit"; auditId: string; token: string | null }
-  // Supplier email links open the app on the supplier side: /supplier
-  | { name: "supplier" }
+  // Supplier email links open the app on the supplier side: /supplier, or
+  // straight to an enquiry: /supplier/enquiries[/:id]
+  | { name: "supplier"; tab?: "enquiries"; enquiryId?: string | null }
+  // Customer email link to an enquiry thread: /enquiries[/:id]
+  | { name: "enquiries"; enquiryId: string | null }
   // Customer email links straight to their maintenance register / requests
   | { name: "machines" }
   | { name: "requests" }
@@ -28,7 +31,13 @@ export function matchRoute(pathname: string, search = ""): Route {
   if (audit) {
     return { name: "audit", auditId: decodeURIComponent(audit[1]), token: new URLSearchParams(search).get("t") };
   }
+  const supplierEnquiry = pathname.match(/^\/supplier\/enquiries(?:\/([^/]+))?\/?$/);
+  if (supplierEnquiry) {
+    return { name: "supplier", tab: "enquiries", enquiryId: supplierEnquiry[1] ? decodeURIComponent(supplierEnquiry[1]) : null };
+  }
   if (/^\/supplier\/?$/.test(pathname)) return { name: "supplier" };
+  const enquiry = pathname.match(/^\/enquiries(?:\/([^/]+))?\/?$/);
+  if (enquiry) return { name: "enquiries", enquiryId: enquiry[1] ? decodeURIComponent(enquiry[1]) : null };
   if (/^\/machines\/?$/.test(pathname)) return { name: "machines" };
   if (/^\/requests\/?$/.test(pathname)) return { name: "requests" };
   return { name: "home" };

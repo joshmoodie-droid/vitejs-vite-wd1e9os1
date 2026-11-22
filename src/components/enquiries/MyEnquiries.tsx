@@ -21,7 +21,7 @@ export function MyEnquiries({
   const open = inquiries?.find((i) => i.id === openId);
 
   if (open) {
-    return <EnquiryThread inquiry={open} userId={customerId} onBack={() => onOpen(null)} onChanged={onReload} />;
+    return <EnquiryThread inquiry={open} userId={customerId} role="customer" onBack={() => onOpen(null)} onChanged={onReload} />;
   }
 
   return (
@@ -42,7 +42,7 @@ export function MyEnquiries({
       <div className="space-y-3">
         {inquiries?.map((i) => {
           const meta = INQUIRY_STATUS[i.status];
-          const unread = isUnread(i);
+          const unread = isUnread(i, "customer");
           return (
             <button
               key={i.id}

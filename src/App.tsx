@@ -31,7 +31,7 @@ const initialRoute = currentRoute().name;
 const initialView = initialRoute === "supplier" ? "supplier" : "customer";
 // Email links to /machines and /requests open those customer screens (they
 // fall back to sign-in when signed out).
-const initialCustomerView = initialRoute === "machines" ? "machines" : initialRoute === "requests" ? "mine" : "new";
+const initialCustomerView = initialRoute === "machines" ? "machines" : initialRoute === "requests" || initialRoute === "enquiries" ? "mine" : "new";
 
 export default function HoseQuoteApp() {
   const [view, setView] = useState(initialView);
@@ -53,7 +53,9 @@ export default function HoseQuoteApp() {
   const [profile, setProfile] = useState(null);
   const [customerView, setCustomerView] = useState(initialCustomerView); // "new" | "auth" | "mine" | "machines" | "account"
   // Where My requests opens: set after sending an enquiry so the customer lands on its thread.
-  const [mineStart, setMineStart] = useState(null); // { tab, enquiryId } | null
+  const [mineStart, setMineStart] = useState(
+    initialRoute === "enquiries" ? { tab: "enquiries", enquiryId: currentRoute().enquiryId } : null,
+  ); // { tab, enquiryId } | null
   useEffect(() => { if (customerView !== "mine") setMineStart(null); }, [customerView]);
 
   const [step, setStep] = useState(1);
