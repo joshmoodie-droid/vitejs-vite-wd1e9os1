@@ -3,7 +3,7 @@
 // pre-existing type errors, mostly inferred-`any` component props. The rest of
 // src/ IS type-checked in CI — put new work in its own module rather than
 // growing this file, and drop this pragma once it's broken up.
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Wrench, Gauge, Settings, Droplet, MapPin, User, ChevronLeft, ChevronRight, RefreshCw, Send, Lock, Unlock, LogOut, Building2, CheckCircle2, Plus, Clock, Truck, ClipboardList, ArrowLeft, Tractor } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import { HOSE_TYPES, BORES, FITTING_TYPES, ORIENTATIONS, URGENCY, EQUIPMENT_TYPES, JOB_ISSUES } from "./lib/catalog";
@@ -13,6 +13,7 @@ import { supplierFromRow, pricingFromRow, requestFromRow, quoteFromRow, connecti
 import { loadCommissions } from "./lib/commission";
 import { areasMatch, slugify } from "./lib/util";
 import { currentRoute } from "./lib/routes";
+import { isNewSignIn } from "./lib/authEvents";
 import { Field, inputClass, StepDot, SectionTitle, Badge } from "./components/ui";
 import { BookingSpec, AssemblyPriceBreakdown, ManufacturingSpec } from "./components/specs";
 import { AssemblyCard } from "./components/AssemblyCard";
@@ -150,11 +151,17 @@ export default function HoseQuoteApp() {
   }, [customer, loadAll]);
 
   // ---- customer auth wiring (Phase 2) ----
+  const signedInUserId = useRef(null); // who we last saw signed in, to tell a new sign-in from a repeat announcement
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setCustomer(data.session?.user ?? null));
+    supabase.auth.getSession().then(({ data }) => {
+      signedInUserId.current = signedInUserId.current ?? data.session?.user?.id ?? null;
+      setCustomer(data.session?.user ?? null);
+    });
     const { data: sub } = supabase.auth.onAuthStateChange((evt, s) => {
+      const previousUserId = signedInUserId.current;
+      signedInUserId.current = s?.user?.id ?? null;
       setCustomer(s?.user ?? null);
-      if (evt === "SIGNED_IN") {
+      if (isNewSignIn(evt, previousUserId, signedInUserId.current)) {
         // Supplier / admin sign-ins happen from the portal — leave them there;
         // the supplier-resolution effect routes them. Customers go to My requests.
         setView((v) => {
