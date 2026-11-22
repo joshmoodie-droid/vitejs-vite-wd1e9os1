@@ -4,29 +4,19 @@
 // src/ IS type-checked in CI — put new work in its own module rather than
 // growing this file, and drop this pragma once it's broken up.
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { Wrench, Gauge, Settings, Droplet, MapPin, User, ChevronLeft, ChevronRight, RefreshCw, Send, Lock, Unlock, LogOut, Building2, CheckCircle2, Plus, Clock, Truck, ClipboardList, ArrowLeft, Tractor } from "lucide-react";
+import { Wrench, Droplet, RefreshCw, LogOut, Building2, ClipboardList, Tractor } from "lucide-react";
 import { supabase } from "./supabaseClient";
-import { HOSE_TYPES, BORES, FITTING_TYPES, ORIENTATIONS, URGENCY, EQUIPMENT_TYPES, JOB_ISSUES } from "./lib/catalog";
-import { defaultPricing, calcEstimate, combinedTotal, calcBookingEstimate } from "./lib/pricing";
+import { defaultPricing, calcEstimate } from "./lib/pricing";
 import { emptyAssembly, emptyForm, emptyBookingForm } from "./lib/forms";
 import { supplierFromRow, pricingFromRow, requestFromRow, quoteFromRow, connectionFromRow } from "./lib/rows";
 import { loadCommissions } from "./lib/commission";
-import { areasMatch, slugify } from "./lib/util";
 import { currentRoute } from "./lib/routes";
 import { shouldGoToMyRequests } from "./lib/authEvents";
-import { Field, inputClass, StepDot, SectionTitle, Badge } from "./components/ui";
-import { BookingSpec, AssemblyPriceBreakdown, ManufacturingSpec } from "./components/specs";
-import { AssemblyCard } from "./components/AssemblyCard";
 import { FlowChooser } from "./components/FlowChooser";
 import { CustomerAuth, SupplierAuth, SupplierNotLinked } from "./components/auth";
-import { PricingAdmin } from "./components/PricingAdmin";
-import { AdminSuppliers } from "./components/AdminSuppliers";
-import { ActiveQuoteEditor, SupplierFieldServiceReview, AutoQuoteReview } from "./components/quoteEditors";
 import { MyRequests } from "./components/MyRequests";
 import { MyMachines } from "./components/machines/MyMachines";
 import { AuditBooking } from "./components/audits/AuditBooking";
-import { JobQuoteCard, RequestCard } from "./components/portalCards";
-import { FieldServiceSection } from "./components/FieldServiceSection";
 import { SupplierPortal, AdminPortal } from "./components/portals";
 import { CustomerFlow, BookingFlow } from "./components/flows";
 import { MobileNav, AccountPanel } from "./components/MobileNav";
