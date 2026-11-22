@@ -10,6 +10,7 @@
 //   - audits / audit_items -> no anon access; anon can't call book_audit (0016)
 //     or create_quote_from_audit (0019)
 //   - commissions / supplier_commission -> no anon access (0021)
+//   - inquiries / inquiry_messages -> no anon access; anon can't call the enquiry functions (0023)
 //   - suppliers / supplier_pricing     -> still world-readable (customer picker)
 //   - every table                      -> anon cannot INSERT / UPDATE
 //   - the sanctioned anon path (SECURITY DEFINER RPCs) still callable
@@ -93,7 +94,7 @@ for (const table of ["requests", "quotes", "connections"]) {
 // tables may be empty, so the INSERT probes in section 3 are the real guard.
 for (const table of [
   "machines", "machine_hoses", "service_log", "hose_checks", "audits", "audit_items",
-  "commissions", "supplier_commission",
+  "commissions", "supplier_commission", "inquiries", "inquiry_messages",
 ]) {
   const res = await api(`/${table}?select=*&limit=5`);
   let body = null;
@@ -166,6 +167,8 @@ const inserts = [
   ["audit_items", { audit_id: "00000000-0000-0000-0000-000000000000", machine_label: marker, position: marker, condition: "ok" }],
   ["commissions", { quote_id: marker, supplier_id: realSupplier?.id ?? NONE, request_id: marker, status: "completed", rate: 0 }],
   ["supplier_commission", { supplier_id: realSupplier?.id ?? NONE, rate: 0 }],
+  ["inquiries", { subject: marker }],
+  ["inquiry_messages", { inquiry_id: "00000000-0000-0000-0000-000000000000", sender: "customer", body: marker }],
 ];
 for (const [table, row] of inserts) {
   const res = await api(`/${table}`, {
@@ -325,6 +328,24 @@ if (realSupplier) {
     }),
   });
   check("anon cannot create a quote from an audit", !res.ok, `create_quote_from_audit answered ${res.status} for anon`);
+}
+
+// --- 10. enquiries can't be created or answered anonymously (0023) ----------
+{
+  const Z = "00000000-0000-0000-0000-000000000000";
+  for (const [fn, body] of [
+    ["create_inquiry", { p_subject: marker, p_body: marker, p_location: "", p_machine_id: null, p_photos: [] }],
+    ["post_inquiry_message", { p_inquiry_id: Z, p_as: "customer", p_body: marker, p_photos: [] }],
+    ["mark_inquiry_read", { p_inquiry_id: Z, p_as: "customer" }],
+    ["close_inquiry", { p_inquiry_id: Z, p_as: "customer" }],
+  ]) {
+    const res = await api(`/rpc/${fn}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    check(`anon cannot call ${fn}`, !res.ok, `${fn} answered ${res.status} for anon`);
+  }
 }
 
 // --- verdict --------------------------------------------------------------
