@@ -3,7 +3,7 @@
 // RequestCard / JobQuoteCard lists; AdminPortal also hosts AdminSuppliers.
 
 import { useState } from "react";
-import { LogOut, Wrench, Settings, Building2, ClipboardCheck, BadgePercent, MessageCircleQuestion } from "lucide-react";
+import { LogOut, Wrench, Settings, Building2, ClipboardCheck, BadgePercent, MessageCircleQuestion, CalendarDays } from "lucide-react";
 import { RequestCard, JobQuoteCard } from "./portalCards";
 import { PricingAdmin } from "./PricingAdmin";
 import { AdminSuppliers } from "./AdminSuppliers";
@@ -11,6 +11,7 @@ import { SupplierAudits } from "./audits/SupplierAudits";
 import { CommissionAdmin } from "./CommissionAdmin";
 import { SupplierEnquiries } from "./enquiries/SupplierEnquiries";
 import { useSupplierInquiries } from "./enquiries/useSupplierInquiries";
+import { SupplierSchedule, AdminSchedule } from "./schedule/SupplierSchedule";
 import { isUnread } from "../lib/inquiries";
 import { currentRoute } from "../lib/routes";
 import { dollars, percent, rateFor } from "../lib/commission";
@@ -74,14 +75,15 @@ export function SupplierPortal({ supplier, authUserId, onLogout, requests, quote
         </button>
       </div>
 
-      <div className="flex gap-1 bg-neutral-900 rounded-lg p-1 mb-6">
+      <div className="flex gap-1 bg-neutral-900 rounded-lg p-1 mb-6 overflow-x-auto">
         {[
           { key: "jobs", label: "Jobs", icon: Wrench },
           { key: "audits", label: "Audits", icon: ClipboardCheck },
           { key: "enquiries", label: "Enquiries", icon: MessageCircleQuestion, count: unreadEnquiries },
+          { key: "schedule", label: "Schedule", icon: CalendarDays },
           { key: "pricing", label: "Pricing", icon: Settings },
         ].map((t) => (
-          <button key={t.key} onClick={() => setTab(t.key)} className={`flex-1 min-w-0 py-2 rounded-md font-semibold text-xs sm:text-sm transition-colors flex items-center justify-center gap-1.5 ${tab === t.key ? "bg-orange-500 text-black" : "text-neutral-400"}`}>
+          <button key={t.key} onClick={() => setTab(t.key)} className={`flex-1 min-w-fit px-2.5 whitespace-nowrap py-2 rounded-md font-semibold text-xs sm:text-sm transition-colors flex items-center justify-center gap-1.5 ${tab === t.key ? "bg-orange-500 text-black" : "text-neutral-400"}`}>
             <t.icon className="w-4 h-4 shrink-0 hidden sm:block" /> <TabLabel label={t.label} count={t.count} />
           </button>
         ))}
@@ -175,6 +177,8 @@ export function SupplierPortal({ supplier, authUserId, onLogout, requests, quote
         <SupplierEnquiries userId={authUserId} inquiries={enquiries.inquiries} loadError={enquiries.error} onReload={enquiries.reload} initialOpenId={enquiryLink()?.enquiryId ?? null} />
       )}
 
+      {tab === "schedule" && <SupplierSchedule supplierId={supplier.id} afterHoursFee={pricing?.afterHoursFee} />}
+
       {tab === "pricing" && <PricingAdmin pricing={pricing} onSave={onSavePricing} />}
     </div>
   );
@@ -226,15 +230,16 @@ export function AdminPortal({
         </button>
       </div>
 
-      <div className="flex gap-1 bg-neutral-900 rounded-lg p-1 mb-6">
+      <div className="flex gap-1 bg-neutral-900 rounded-lg p-1 mb-6 overflow-x-auto">
         {[
           { key: "jobs", label: "Jobs", icon: Wrench },
           { key: "audits", label: "Audits", icon: ClipboardCheck },
           { key: "enquiries", label: "Enquiries", icon: MessageCircleQuestion, count: unreadEnquiries },
+          { key: "schedule", label: "Schedule", icon: CalendarDays },
           { key: "suppliers", label: "Suppliers", icon: Building2 },
           { key: "commission", label: "Commission", icon: BadgePercent },
         ].map((t) => (
-          <button key={t.key} onClick={() => setTab(t.key)} className={`flex-1 min-w-0 py-2 rounded-md font-semibold text-xs sm:text-sm transition-colors flex items-center justify-center gap-1.5 ${tab === t.key ? "bg-orange-500 text-black" : "text-neutral-400"}`}>
+          <button key={t.key} onClick={() => setTab(t.key)} className={`flex-1 min-w-fit px-2.5 whitespace-nowrap py-2 rounded-md font-semibold text-xs sm:text-sm transition-colors flex items-center justify-center gap-1.5 ${tab === t.key ? "bg-orange-500 text-black" : "text-neutral-400"}`}>
             <t.icon className="w-4 h-4 shrink-0 hidden sm:block" /> <TabLabel label={t.label} count={t.count} />
           </button>
         ))}
@@ -247,6 +252,8 @@ export function AdminPortal({
       {tab === "enquiries" && (
         <SupplierEnquiries userId={authUserId} inquiries={enquiries.inquiries} loadError={enquiries.error} onReload={enquiries.reload} showSupplier initialOpenId={enquiryLink()?.enquiryId ?? null} />
       )}
+
+      {tab === "schedule" && <AdminSchedule suppliers={suppliers} pricingBySupplier={pricingBySupplier} />}
 
       {tab === "commission" && (
         <CommissionAdmin commissions={commissions} rates={commissionRates} suppliers={suppliers} requests={requests} onReload={onReload} />

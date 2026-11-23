@@ -251,7 +251,7 @@ export default function HoseQuoteApp() {
   };
 
   function pricingToRow(p) {
-    return { hose: p.hose, fitting: p.fitting, labour_base: p.labourBase, crimp_charge: p.crimpCharge, travel_base: p.travelBase, callout_fee: p.calloutFee, labour_hourly_rate: p.labourHourlyRate, delivery_fee: p.deliveryFee, audit_fee: p.auditFee ?? 150, audit_fee_per_machine: p.auditFeePerMachine ?? 0 };
+    return { hose: p.hose, fitting: p.fitting, labour_base: p.labourBase, crimp_charge: p.crimpCharge, travel_base: p.travelBase, callout_fee: p.calloutFee, labour_hourly_rate: p.labourHourlyRate, delivery_fee: p.deliveryFee, audit_fee: p.auditFee ?? 150, audit_fee_per_machine: p.auditFeePerMachine ?? 0, after_hours_fee: p.afterHoursFee ?? 150 };
   }
 
   const update = (key, value) => setForm((f) => ({ ...f, [key]: value }));

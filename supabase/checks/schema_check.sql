@@ -30,6 +30,10 @@ select item, ok from (values
   ('0023 post_inquiry_message function',               exists (select 1 from pg_proc where proname = 'post_inquiry_message')),
   ('0023 enquiry photos viewable by participants',     exists (select 1 from pg_proc where proname = 'can_view_photo' and prosrc like '%inquiry_messages%')),
   ('0023 a supplier takes enquiries',                  exists (select 1 from public.suppliers where takes_enquiries)),
-  ('0024 create_request fills NOT NULL defaults',      exists (select 1 from pg_proc where proname = 'create_request' and prosrc like '%rec.fulfillment%'))
+  ('0024 create_request fills NOT NULL defaults',      exists (select 1 from pg_proc where proname = 'create_request' and prosrc like '%rec.fulfillment%')),
+  ('0025 supplier_pricing.after_hours_fee',            exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'supplier_pricing' and column_name = 'after_hours_fee')),
+  ('0025 supplier_schedule table',                     to_regclass('public.supplier_schedule') is not null),
+  ('0025 supplier_days_off table',                     to_regclass('public.supplier_days_off') is not null),
+  ('0025 save_supplier_schedule function',             exists (select 1 from pg_proc where proname = 'save_supplier_schedule'))
 ) as checks(item, ok)
 order by item;
