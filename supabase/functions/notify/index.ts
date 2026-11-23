@@ -385,8 +385,7 @@ async function onAppointmentChange(type: string, rec: any, old: any) {
     `${heading} — ${req.id}`,
     shell(
       heading,
-      `Your technician visit for <b>${req.id}</b> is now <b>${qldRange(rec.starts_at, rec.ends_at)}</b> (Queensland time).
-       If that doesn't suit, reply to the supplier through your booking page.`,
+      `Your technician visit for <b>${req.id}</b> is now <b>${qldRange(rec.starts_at, rec.ends_at)}</b> (Queensland time).`,
       { label: "View your booking", url: customerLink(req) },
     ),
   );
