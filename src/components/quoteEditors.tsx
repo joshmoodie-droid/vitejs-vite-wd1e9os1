@@ -148,7 +148,8 @@ export function AutoQuoteReview({ quote, request, pricing, onConfirmQuote, onRej
   const [calloutFee, setCalloutFee] = useState(quote.calloutFee ?? 65);
   const [travelCharge, setTravelCharge] = useState(quote.travelCharge ?? 45);
   const [labourHours, setLabourHours] = useState(quote.customerLabourHours || 1);
-  const [hourlyRate, setHourlyRate] = useState(85);
+  // Start from the supplier's own Labour Hourly Rate (Pricing): the rate the customer's estimate used.
+  const [hourlyRate, setHourlyRate] = useState(pricing?.labourHourlyRate ?? 85);
   const isAfterHours = !!(request?.afterHours || quote.afterHoursCharge > 0);
   const [afterHoursFee, setAfterHoursFee] = useState(quote.afterHoursCharge ?? pricing?.afterHoursFee ?? 150);
 
