@@ -739,6 +739,9 @@ export default function HoseQuoteApp() {
               const row = {
                 id: record.id, request_type: "booking", status: "open", location: record.location,
                 customer_id: customer?.id ?? null,
+                // requests.fulfillment is NOT NULL; bookings have no pickup/delivery choice,
+                // and create_request() doesn't apply column defaults (see migration 0024).
+                fulfillment: "pickup",
                 urgency: record.urgency, selected_supplier_id: record.selectedSupplierId,
                 name: record.name, phone: record.phone, email: record.email, preferred_time: record.preferredTime,
                 notes: record.notes, photo_url: record.photoUrl, equipment_type: record.equipmentType,
