@@ -435,10 +435,13 @@ if (realSupplier) {
     try { secondBody = await second.json(); } catch { /* non-JSON */ }
     check("the same slot can't be booked twice", !second.ok && /no longer available/.test(secondBody?.message ?? ""), `expected 'no longer available' — got ${second.status}, ${JSON.stringify(secondBody)?.slice(0, 160)}`);
 
+    // available_slots takes the supplier's (Brisbane) dates. A 7 am or 9 am slot falls on the
+    // previous UTC date, so look it up by its Brisbane day, not slice(0, 10) of the timestamp.
+    const slotDay = new Date(slot.slot_start).toLocaleDateString("en-CA", { timeZone: "Australia/Brisbane" });
     const after = await api(`/rpc/available_slots`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ p_supplier_id: realSupplier.id, p_from: slot.slot_start.slice(0, 10), p_to: slot.slot_start.slice(0, 10) }),
+      body: JSON.stringify({ p_supplier_id: realSupplier.id, p_from: slotDay, p_to: slotDay }),
     });
     let afterSlots = [];
     try { afterSlots = await after.json(); } catch { /* non-JSON */ }
