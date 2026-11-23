@@ -59,6 +59,7 @@ Dashboard → **Database → Webhooks → Create a new hook** (one per row below
 | `requests_insert` | `requests` | Insert | Supabase Edge Functions → `notify` | (auto) |
 | `quotes_changes` | `quotes` | Insert, Update | Supabase Edge Functions → `notify` | (auto) |
 | `inquiry_messages_insert` | `inquiry_messages` | Insert | Supabase Edge Functions → `notify` | (auto) |
+| `appointments_changes` | `appointments` | Insert, Update | Supabase Edge Functions → `notify` | (auto) |
 
 No custom headers needed (`notify` is deployed with `verify_jwt = false`).
 

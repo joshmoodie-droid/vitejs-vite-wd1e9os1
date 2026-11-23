@@ -1,7 +1,7 @@
 // Supabase Edge Function: notify
 // -------------------------------------------------------------------
-// Fired by Database Webhooks on the `requests`, `quotes` and
-// `inquiry_messages` tables.
+// Fired by Database Webhooks on the `requests`, `quotes`, `inquiry_messages`
+// and `appointments` tables.
 // Diffs the row change, decides which transactional emails to send,
 // and sends them through Resend. Every email carries a link back to
 // the app.
@@ -136,7 +136,7 @@ async function onRequestCreated(req: any) {
   // Field service bookings: the time the customer asked for (a held slot, or an
   // after-hours callout the supplier arranges). Customer-written text, so escaped.
   const timeNote = req.request_type === "booking" && req.preferred_time
-    ? `<br>Requested time: <b>${esc(req.preferred_time)}</b>${req.after_hours ? " (after-hours callout)" : ""}.`
+    ? `<br>Requested time: <b>${esc(req.preferred_time)}</b>${req.after_hours && !/after-hours/i.test(req.preferred_time) ? " (after-hours callout)" : ""}.`
     : "";
 
   await sendEmail(
@@ -345,6 +345,53 @@ async function onInquiryMessage(msg: any) {
   }
 }
 
+// Supplier calendar (migration 0027). A booking's time changing is worth an
+// email: the supplier moved it, or arranged the time for an after-hours callout.
+// A slot the customer picked is held in the same moment as their booking, and
+// they already got the "received" email with that time, so that isn't repeated.
+const QLD = "Australia/Brisbane";
+function qldRange(startIso: string, endIso: string): string {
+  const part = (iso: string, opt: Intl.DateTimeFormatOptions) =>
+    new Intl.DateTimeFormat("en-AU", { timeZone: QLD, ...opt }).formatToParts(new Date(iso));
+  const get = (parts: Intl.DateTimeFormatPart[], t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  const clock = (iso: string) => {
+    const p = part(iso, { hour: "numeric", minute: "2-digit", hour12: true });
+    const m = get(p, "minute");
+    return `${get(p, "hour")}${m === "00" ? "" : ":" + m} ${get(p, "dayPeriod").toLowerCase()}`;
+  };
+  const d = part(startIso, { weekday: "short", day: "numeric", month: "short" });
+  return `${get(d, "weekday")} ${get(d, "day")} ${get(d, "month")}, ${clock(startIso)} – ${clock(endIso)}`;
+}
+
+async function onAppointmentChange(type: string, rec: any, old: any) {
+  if (rec?.kind !== "job" || !rec.request_id) return;
+  if (rec.state !== "held" && rec.state !== "confirmed") return;
+  const req = await getRequest(rec.request_id);
+  if (!req?.email) return;
+
+  let heading: string;
+  if (type === "INSERT") {
+    if (!req.after_hours) return;
+    heading = "Your after-hours callout time is arranged";
+  } else if (type === "UPDATE") {
+    if (!old || old.starts_at === rec.starts_at) return;
+    heading = "Your booking time has changed";
+  } else {
+    return;
+  }
+
+  await sendEmail(
+    req.email,
+    `${heading} — ${req.id}`,
+    shell(
+      heading,
+      `Your technician visit for <b>${req.id}</b> is now <b>${qldRange(rec.starts_at, rec.ends_at)}</b> (Queensland time).
+       If that doesn't suit, reply to the supplier through your booking page.`,
+      { label: "View your booking", url: customerLink(req) },
+    ),
+  );
+}
+
 // ---------- webhook entrypoint ----------
 
 Deno.serve(async (req) => {
@@ -363,6 +410,8 @@ Deno.serve(async (req) => {
       await onRequestCreated(record);
     } else if (table === "inquiry_messages" && type === "INSERT") {
       await onInquiryMessage(record);
+    } else if (table === "appointments" && (type === "INSERT" || type === "UPDATE")) {
+      await onAppointmentChange(type, record, old_record);
     } else if (table === "quotes" && type === "UPDATE") {
       // assumes the webhook sends a full old_record (REPLICA IDENTITY FULL),
       // same as the quote-status path already relies on

@@ -41,6 +41,11 @@ select item, ok from (values
   ('0026 create_booking function',                     exists (select 1 from pg_proc where proname = 'create_booking')),
   ('0026 requests.scheduled_start',                    exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'requests' and column_name = 'scheduled_start')),
   ('0026 quotes.after_hours_charge',                   exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'quotes' and column_name = 'after_hours_charge')),
-  ('0026 quote -> appointment trigger',                exists (select 1 from pg_trigger where tgname = 'quotes_sync_appointment'))
+  ('0026 quote -> appointment trigger',                exists (select 1 from pg_trigger where tgname = 'quotes_sync_appointment')),
+  ('0027 suppliers can read their appointments',       exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'appointments' and policyname = 'appointments_select')),
+  ('0027 supplier_slots function',                     exists (select 1 from pg_proc where proname = 'supplier_slots')),
+  ('0027 block_time function',                         exists (select 1 from pg_proc where proname = 'block_time')),
+  ('0027 move_booking function',                       exists (select 1 from pg_proc where proname = 'move_booking')),
+  ('0027 arrange_time function',                       exists (select 1 from pg_proc where proname = 'arrange_time'))
 ) as checks(item, ok)
 order by item;
