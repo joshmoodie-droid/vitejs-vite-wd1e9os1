@@ -472,7 +472,11 @@ export function BookingFlow({ customer, suppliers, pricingBySupplier, quotes, on
     setSubmittedRequestId(id);
   };
 
-  const resetBooking = () => { setForm(emptyBookingForm()); setStep(1); setSubmittedRequestId(null); setErrors({}); onBack(); };
+  // A signed-in customer keeps their contact details for the next booking (a signed-out visitor starts blank).
+  const resetBooking = () => {
+    setForm({ ...emptyBookingForm(), ...(customer ? { name: form.name, phone: form.phone, email: form.email } : {}) });
+    setStep(1); setSubmittedRequestId(null); setErrors({}); onBack();
+  };
 
   if (submittedRequestId) {
     const myQuotes = quotes.filter((q) => q.requestId === submittedRequestId && q.status !== "declined").sort((a, b) => a.priceLow - b.priceLow);

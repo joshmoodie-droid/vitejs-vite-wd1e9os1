@@ -345,7 +345,11 @@ export default function HoseQuoteApp() {
     setSubmittedRequestId(id);
   };
 
-  const resetWizard = () => { setForm(emptyForm()); setStep(1); setSubmittedRequestId(null); setErrors({}); setFlowType(null); };
+  // A signed-in customer keeps their contact details for the next request (a signed-out visitor starts blank).
+  const resetWizard = () => {
+    setForm({ ...emptyForm(), ...(customer ? { name: form.name, phone: form.phone, email: form.email } : {}) });
+    setStep(1); setSubmittedRequestId(null); setErrors({}); setFlowType(null);
+  };
 
   // "Order again" / "Get a quote" from the maintenance register or a past
   // request: open the quote wizard with `prefill` (lib/machines QuotePrefill)
