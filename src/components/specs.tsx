@@ -13,6 +13,8 @@ export function BookingSpec({ r }) {
         <div><span className="text-neutral-500">Issue:</span> {r.issue}</div>
         <div><span className="text-neutral-500">Priority:</span> {URGENCY.find((u) => u.key === r.urgency)?.label}</div>
         <div className="col-span-2"><span className="text-neutral-500">Location:</span> {r.location}</div>
+        {r.preferredTime && <div className="col-span-2"><span className="text-neutral-500">When:</span> <span className="text-white font-semibold">{r.preferredTime}</span></div>}
+        {r.afterHours && <div className="col-span-2 text-amber-400 font-semibold">After-hours callout — arrange the exact time with the customer</div>}
       </div>
       {r.description && <div className="text-neutral-300 pt-1 border-t border-neutral-800"><span className="text-neutral-500">Details:</span> {r.description}</div>}
       {r.labourHoursEstimate && <div className="text-orange-400 pt-1 border-t border-neutral-800"><span className="text-neutral-500">Customer's time estimate:</span> {r.labourHoursEstimate} hour{parseFloat(r.labourHoursEstimate) !== 1 ? "s" : ""}</div>}

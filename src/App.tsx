@@ -392,6 +392,7 @@ export default function HoseQuoteApp() {
     if (overrides.labour !== undefined) row.labour = overrides.labour;
     if (overrides.hoseAssemblyCost !== undefined) row.hose_assembly_cost = overrides.hoseAssemblyCost;
     if (overrides.deliveryCharge !== undefined) row.delivery_charge = overrides.deliveryCharge;
+    if (overrides.afterHoursCharge !== undefined) row.after_hours_charge = overrides.afterHoursCharge;
     row.status = "confirmed";
     const res = await supabase.from("quotes").update(row).eq("id", quoteId).select("id");
     if (!wrote(res)) { fail("Couldn't confirm the quote — please try again.", res.error); return; }
@@ -411,6 +412,7 @@ export default function HoseQuoteApp() {
     if (overrides.labour !== undefined) row.labour = overrides.labour;
     if (overrides.hoseAssemblyCost !== undefined) row.hose_assembly_cost = overrides.hoseAssemblyCost;
     if (overrides.deliveryCharge !== undefined) row.delivery_charge = overrides.deliveryCharge;
+    if (overrides.afterHoursCharge !== undefined) row.after_hours_charge = overrides.afterHoursCharge;
     const res = await supabase.from("quotes").update(row).eq("id", quoteId).select("id");
     if (!wrote(res)) { fail("Couldn't save the pricing changes — please try again.", res.error); return; }
     setQuotes((qs) => qs.map((q) => (q.id === quoteId ? { ...q, ...overrides } : q)));
@@ -748,15 +750,28 @@ export default function HoseQuoteApp() {
                 photos: customer && record.photos?.length ? record.photos : null,
                 issue: record.issue, description: record.description, labour_hours_estimate: record.labourHoursEstimate,
               };
-              const { data: createdReq, error: requestError } = await supabase.rpc("create_request", { r: row });
-              if (requestError) { fail("Your booking couldn't be sent — please check your connection and try again.", requestError); return false; }
-              setRequests((rs) => [requestFromRow({ ...row, ...(createdReq ?? { created_at: new Date().toISOString() }) }), ...rs]);
+              row.after_hours = !!record.afterHours;
+              // A chosen business-hours slot is held in the same step as saving the booking.
+              const slot = record.slotStart && !record.afterHours ? record.slotStart : null;
+              const { data: createdReq, error: requestError } = slot
+                ? await supabase.rpc("create_booking", { r: row, p_slot_start: slot })
+                : await supabase.rpc("create_request", { r: row });
+              if (requestError) {
+                if (slot && /no longer available/i.test(requestError.message || "")) {
+                  fail("That time was just taken — please pick another.", requestError);
+                  return "taken";
+                }
+                fail("Your booking couldn't be sent — please check your connection and try again.", requestError);
+                return false;
+              }
+              setRequests((rs) => [requestFromRow({ ...row, scheduled_start: slot, ...(createdReq ?? { created_at: new Date().toISOString() }) }), ...rs]);
               if (newQuote) {
                 const qrow = {
                   id: newQuote.id, request_id: record.id, supplier_id: newQuote.supplierId, is_booking: true,
                   price_low: newQuote.priceLow, price_high: newQuote.priceHigh,
                   callout_fee: newQuote.calloutFee, travel_charge: newQuote.travelCharge, labour: newQuote.labour,
                   customer_labour_hours: newQuote.customerLabourHours, hose_assembly_cost: 0,
+                  after_hours_charge: newQuote.afterHoursCharge ?? null,
                   lead_time_days: newQuote.leadTimeDays, quote_type: "auto", status: "pending",
                 };
                 const { error: quoteError } = await supabase.rpc("create_auto_quote", { q: qrow });

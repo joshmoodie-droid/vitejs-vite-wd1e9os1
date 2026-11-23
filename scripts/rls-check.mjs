@@ -17,6 +17,8 @@
 //   - create_request rejects a machine_id the caller doesn't own (0013)
 //   - create_request accepts a field service booking that omits fulfillment (0024)
 //   - supplier_schedule / supplier_days_off -> no anon access; anon can't call save_supplier_schedule (0025)
+//   - appointments -> no anon access; anon can list free slots and book one, and a second booking
+//     of the same slot is refused (0026)
 //   - the `photos` storage bucket: no anon upload, no public reads (0014)
 //
 // Run: `npm run test:rls`. Needs VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY
@@ -97,7 +99,7 @@ for (const table of ["requests", "quotes", "connections"]) {
 for (const table of [
   "machines", "machine_hoses", "service_log", "hose_checks", "audits", "audit_items",
   "commissions", "supplier_commission", "inquiries", "inquiry_messages",
-  "supplier_schedule", "supplier_days_off",
+  "supplier_schedule", "supplier_days_off", "appointments",
 ]) {
   const res = await api(`/${table}?select=*&limit=5`);
   let body = null;
@@ -174,6 +176,7 @@ const inserts = [
   ["inquiry_messages", { inquiry_id: "00000000-0000-0000-0000-000000000000", sender: "customer", body: marker }],
   ["supplier_schedule", { supplier_id: realSupplier?.id ?? NONE, min_notice_hours: 0 }],
   ["supplier_days_off", { supplier_id: realSupplier?.id ?? NONE, day: "2030-01-01" }],
+  ["appointments", { supplier_id: realSupplier?.id ?? NONE, starts_at: "2030-01-01T00:00:00Z", ends_at: "2030-01-01T02:00:00Z" }],
 ];
 for (const [table, row] of inserts) {
   const res = await api(`/${table}`, {
@@ -393,6 +396,55 @@ if (realSupplier) {
     }),
   });
   check("anon cannot call save_supplier_schedule", !res.ok, `save_supplier_schedule answered ${res.status} for anon`);
+}
+
+// --- 12. slots can be listed and booked anonymously, and never twice (0026) --
+// Books one far-out slot on staging (a held booking that lapses on its own),
+// then tries to book the same slot again.
+if (realSupplier) {
+  const day = (offset) => new Date(Date.now() + offset * 86400000).toISOString().slice(0, 10);
+  const list = await api(`/rpc/available_slots`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ p_supplier_id: realSupplier.id, p_from: day(1), p_to: day(60) }),
+  });
+  let slots = [];
+  try { slots = await list.json(); } catch { /* non-JSON */ }
+  check("anon can list available slots", list.ok && Array.isArray(slots), `available_slots answered ${list.status}`);
+
+  const free = Array.isArray(slots) ? slots.filter((s) => s.free) : [];
+  const slot = free[free.length - 1]; // far out, so real use doesn't collide with it
+  if (!slot) {
+    check("a free slot exists to test booking with", false, "available_slots returned no free slots for the first supplier");
+  } else {
+    const book = (suffix) => api(`/rpc/create_booking`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        r: { id: `${marker}-${suffix}`, request_type: "booking", status: "open", location: "rls-check", name: marker, selected_supplier_id: realSupplier.id },
+        p_slot_start: slot.slot_start,
+      }),
+    });
+    const first = await book("slot1");
+    let firstBody = null;
+    try { firstBody = await first.json(); } catch { /* non-JSON */ }
+    check("anon can book a free slot", first.ok && firstBody?.id === `${marker}-slot1`, `expected the booking — got ${first.status}, ${JSON.stringify(firstBody)?.slice(0, 160)}`);
+
+    const second = await book("slot2");
+    let secondBody = null;
+    try { secondBody = await second.json(); } catch { /* non-JSON */ }
+    check("the same slot can't be booked twice", !second.ok && /no longer available/.test(secondBody?.message ?? ""), `expected 'no longer available' — got ${second.status}, ${JSON.stringify(secondBody)?.slice(0, 160)}`);
+
+    const after = await api(`/rpc/available_slots`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ p_supplier_id: realSupplier.id, p_from: slot.slot_start.slice(0, 10), p_to: slot.slot_start.slice(0, 10) }),
+    });
+    let afterSlots = [];
+    try { afterSlots = await after.json(); } catch { /* non-JSON */ }
+    const mine = Array.isArray(afterSlots) ? afterSlots.find((s) => s.slot_start === slot.slot_start) : null;
+    check("a booked slot shows as taken", !!mine && mine.free === false, `slot after booking: ${JSON.stringify(mine)}`);
+  }
 }
 
 // --- verdict --------------------------------------------------------------

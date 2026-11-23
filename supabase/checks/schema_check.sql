@@ -34,6 +34,13 @@ select item, ok from (values
   ('0025 supplier_pricing.after_hours_fee',            exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'supplier_pricing' and column_name = 'after_hours_fee')),
   ('0025 supplier_schedule table',                     to_regclass('public.supplier_schedule') is not null),
   ('0025 supplier_days_off table',                     to_regclass('public.supplier_days_off') is not null),
-  ('0025 save_supplier_schedule function',             exists (select 1 from pg_proc where proname = 'save_supplier_schedule'))
+  ('0025 save_supplier_schedule function',             exists (select 1 from pg_proc where proname = 'save_supplier_schedule')),
+  ('0026 appointments table',                          to_regclass('public.appointments') is not null),
+  ('0026 appointments cannot overlap',                 exists (select 1 from pg_constraint where conname = 'appointments_no_overlap')),
+  ('0026 available_slots function',                    exists (select 1 from pg_proc where proname = 'available_slots')),
+  ('0026 create_booking function',                     exists (select 1 from pg_proc where proname = 'create_booking')),
+  ('0026 requests.scheduled_start',                    exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'requests' and column_name = 'scheduled_start')),
+  ('0026 quotes.after_hours_charge',                   exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'quotes' and column_name = 'after_hours_charge')),
+  ('0026 quote -> appointment trigger',                exists (select 1 from pg_trigger where tgname = 'quotes_sync_appointment'))
 ) as checks(item, ok)
 order by item;
