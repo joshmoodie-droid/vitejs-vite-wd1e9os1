@@ -29,6 +29,7 @@ select item, ok from (values
   ('0023 create_inquiry function',                     exists (select 1 from pg_proc where proname = 'create_inquiry')),
   ('0023 post_inquiry_message function',               exists (select 1 from pg_proc where proname = 'post_inquiry_message')),
   ('0023 enquiry photos viewable by participants',     exists (select 1 from pg_proc where proname = 'can_view_photo' and prosrc like '%inquiry_messages%')),
-  ('0023 a supplier takes enquiries',                  exists (select 1 from public.suppliers where takes_enquiries))
+  ('0023 a supplier takes enquiries',                  exists (select 1 from public.suppliers where takes_enquiries)),
+  ('0024 create_request fills NOT NULL defaults',      exists (select 1 from pg_proc where proname = 'create_request' and prosrc like '%rec.fulfillment%'))
 ) as checks(item, ok)
 order by item;

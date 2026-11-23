@@ -15,6 +15,7 @@
 //   - every table                      -> anon cannot INSERT / UPDATE
 //   - the sanctioned anon path (SECURITY DEFINER RPCs) still callable
 //   - create_request rejects a machine_id the caller doesn't own (0013)
+//   - create_request accepts a field service booking that omits fulfillment (0024)
 //   - the `photos` storage bucket: no anon upload, no public reads (0014)
 //
 // Run: `npm run test:rls`. Needs VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY
@@ -242,6 +243,31 @@ if (realSupplier) {
     "anon can still call get_request_by_token RPC",
     res.status === 200,
     `expected 200 (no-match is fine) — got ${res.status}`,
+  );
+}
+
+// --- 5b. a field service booking (no fulfillment sent) can be created (0024) --
+// The booking form never sends requests.fulfillment, which is NOT NULL. Until
+// 0024 create_request() inserted an explicit NULL and every booking failed.
+// This writes one junk request row on staging per run.
+{
+  const res = await api(`/rpc/create_request`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      r: { id: `${marker}-booking`, request_type: "booking", status: "open", location: "rls-check", name: marker },
+    }),
+  });
+  let body = null;
+  try {
+    body = await res.json();
+  } catch {
+    /* non-JSON */
+  }
+  check(
+    "anon can create a field service booking (fulfillment defaults)",
+    res.ok && body?.id === `${marker}-booking`,
+    `expected the booking to be created — got ${res.status}, ${JSON.stringify(body)?.slice(0, 200)}`,
   );
 }
 
