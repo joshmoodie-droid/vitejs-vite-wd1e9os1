@@ -16,6 +16,7 @@
 //   - the sanctioned anon path (SECURITY DEFINER RPCs) still callable
 //   - create_request rejects a machine_id the caller doesn't own (0013)
 //   - create_request accepts a field service booking that omits fulfillment (0024)
+//   - supplier_schedule / supplier_days_off -> no anon access; anon can't call save_supplier_schedule (0025)
 //   - the `photos` storage bucket: no anon upload, no public reads (0014)
 //
 // Run: `npm run test:rls`. Needs VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY
@@ -96,6 +97,7 @@ for (const table of ["requests", "quotes", "connections"]) {
 for (const table of [
   "machines", "machine_hoses", "service_log", "hose_checks", "audits", "audit_items",
   "commissions", "supplier_commission", "inquiries", "inquiry_messages",
+  "supplier_schedule", "supplier_days_off",
 ]) {
   const res = await api(`/${table}?select=*&limit=5`);
   let body = null;
@@ -170,6 +172,8 @@ const inserts = [
   ["supplier_commission", { supplier_id: realSupplier?.id ?? NONE, rate: 0 }],
   ["inquiries", { subject: marker }],
   ["inquiry_messages", { inquiry_id: "00000000-0000-0000-0000-000000000000", sender: "customer", body: marker }],
+  ["supplier_schedule", { supplier_id: realSupplier?.id ?? NONE, min_notice_hours: 0 }],
+  ["supplier_days_off", { supplier_id: realSupplier?.id ?? NONE, day: "2030-01-01" }],
 ];
 for (const [table, row] of inserts) {
   const res = await api(`/${table}`, {
@@ -372,6 +376,23 @@ if (realSupplier) {
     });
     check(`anon cannot call ${fn}`, !res.ok, `${fn} answered ${res.status} for anon`);
   }
+}
+
+// --- 11. the supplier schedule can't be saved anonymously (0025) ------------
+{
+  const res = await api(`/rpc/save_supplier_schedule`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      p_supplier_id: realSupplier?.id ?? NONE,
+      p_hours: [],
+      p_min_notice_hours: 0,
+      p_max_days_ahead: 1,
+      p_hold_hours: 1,
+      p_days_off: [],
+    }),
+  });
+  check("anon cannot call save_supplier_schedule", !res.ok, `save_supplier_schedule answered ${res.status} for anon`);
 }
 
 // --- verdict --------------------------------------------------------------

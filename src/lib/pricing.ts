@@ -33,7 +33,7 @@ export function defaultPricing(scale = 1) {
       };
     });
   });
-  return { hose, fitting, labourBase: Math.round(15 * scale), crimpCharge: Math.round(8 * scale), travelBase: Math.round(45 * scale), calloutFee: Math.round(65 * scale), labourHourlyRate: Math.round(85 * scale), deliveryFee: Math.round(15 * scale) };
+  return { hose, fitting, labourBase: Math.round(15 * scale), crimpCharge: Math.round(8 * scale), travelBase: Math.round(45 * scale), calloutFee: Math.round(65 * scale), labourHourlyRate: Math.round(85 * scale), deliveryFee: Math.round(15 * scale), afterHoursFee: Math.round(150 * scale) };
 }
 
 export function calcEstimate(form, pricing) {
