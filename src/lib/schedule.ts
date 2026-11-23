@@ -132,3 +132,53 @@ export async function saveSchedule(supplierId: string, s: Schedule): Promise<voi
   });
   if (error) throw new Error(error.message);
 }
+
+// ---- bookable slots (phase 2) ----
+
+export interface Slot {
+  start: string; // ISO timestamp of the slot start
+  end: string;
+  free: boolean; // false when someone else holds it
+}
+
+const brisbaneParts = (iso: string) => {
+  const parts = new Intl.DateTimeFormat("en-AU", {
+    timeZone: SCHEDULE_TIMEZONE, year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", hourCycle: "h23", weekday: "short",
+  }).formatToParts(new Date(iso));
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  return { year: get("year"), month: get("month"), day: get("day"), hour: Number(get("hour")), weekday: get("weekday") };
+};
+
+// The slot's calendar date as the supplier sees it, "YYYY-MM-DD".
+export function slotDateKey(iso: string): string {
+  const p = brisbaneParts(iso);
+  return `${p.year}-${p.month}-${p.day}`;
+}
+
+// The slot's starting hour on the supplier's clock (0-23).
+export function slotHour(iso: string): number {
+  return brisbaneParts(iso).hour;
+}
+
+const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+// "Tue 24 Nov, 9 am – 11 am" (Queensland time).
+export function slotLabel(startIso: string): string {
+  const p = brisbaneParts(startIso);
+  return `${p.weekday} ${Number(p.day)} ${MONTH_SHORT[Number(p.month) - 1]}, ${formatHour(p.hour)} – ${formatHour(p.hour + SLOT_HOURS)}`;
+}
+
+// "Fri 27 Nov" for a YYYY-MM-DD key.
+export function dayLabel(key: string): string {
+  const [y, m, d] = key.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  return `${DAY_NAMES[weekdayIndex(dt)]} ${d} ${MONTH_SHORT[m - 1]}`;
+}
+
+// Free and taken slots for a supplier between two YYYY-MM-DD dates (max 62 days).
+export async function loadSlots(supplierId: string, from: string, to: string): Promise<Slot[]> {
+  const { data, error } = await supabase.rpc("available_slots", { p_supplier_id: supplierId, p_from: from, p_to: to });
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as Row[]).map((r) => ({ start: r.slot_start, end: r.slot_end, free: !!r.free }));
+}

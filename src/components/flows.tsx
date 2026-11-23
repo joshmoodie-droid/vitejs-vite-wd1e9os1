@@ -2,7 +2,7 @@
 // - CustomerFlow: multi-step hose-assembly quote wizard + post-submit quote view
 // - BookingFlow: multi-step field-service booking wizard + post-submit view
 
-import { useEffect, useRef } from "react";
+import { Fragment, useEffect, useRef } from "react";
 import { Send, Clock, ChevronLeft, ChevronRight, MapPin, User, Wrench, Gauge, Droplet, Truck, ClipboardList, Plus, ArrowLeft } from "lucide-react";
 import { areasMatch } from "../lib/util";
 import { calcEstimate, combinedTotal, calcBookingEstimate } from "../lib/pricing";
@@ -13,6 +13,8 @@ import { AssemblyCard } from "./AssemblyCard";
 import { FieldServiceSection } from "./FieldServiceSection";
 import { MachinePicker } from "./machines/MachinePicker";
 import { PhotoUploader } from "./photos/PhotoUploader";
+import { SlotPicker } from "./schedule/SlotPicker";
+import { slotLabel, dayLabel } from "../lib/schedule";
 
 export function CustomerFlow({ form, update, errors, step, next, back, submit, updateAssembly, addAssembly, removeAssembly, suppliers, pricingBySupplier, submittedRequestId, resetWizard, quotes, acceptQuote, requestFieldService, confirmFieldService, onBack, customer }: any) {
   // The on-site toggle reveals the site-address fields directly below it —
@@ -427,6 +429,11 @@ export function BookingFlow({ customer, suppliers, pricingBySupplier, quotes, on
     if (s === 2) {
       if (!form.location) e.location = "Enter the job location.";
       if (!form.selectedSupplierId) e.selectedSupplierId = "Select a supplier to continue.";
+      // A time is needed unless it's an emergency or the supplier's times couldn't be loaded.
+      const hasTime = form.afterHours ? !!form.afterHoursDate : !!form.slotStart;
+      if (form.selectedSupplierId && !hasTime && form.urgency !== "emergency" && !form.timeOptional) {
+        e.when = "Pick a day and a time, or choose an after-hours callout.";
+      }
     }
     if (s === 3) {
       if (!form.name) e.name = "Enter your full name.";
@@ -445,17 +452,22 @@ export function BookingFlow({ customer, suppliers, pricingBySupplier, quotes, on
   const submit = async () => {
     if (!validateStep(3)) return;
     const id = `HQ-B-${Date.now()}`;
-    const record = { id, ...form };
+    // What the customer asked for, in words (shown to the supplier and in emails).
+    const when = form.slotStart ? slotLabel(form.slotStart)
+      : form.afterHours && form.afterHoursDate ? `After-hours callout, ${dayLabel(form.afterHoursDate)} (${form.afterHoursWhen.toLowerCase()})`
+      : "";
+    const record = { id, ...form, preferredTime: [when, form.preferredTime].filter(Boolean).join(" — ") };
     const pricing = pricingBySupplier[form.selectedSupplierId];
     const est = calcBookingEstimate(form, pricing);
     const newQuote = est ? {
       id: `Q-${Date.now()}-${form.selectedSupplierId}`, supplierId: form.selectedSupplierId,
-      priceLow: est.low, priceHigh: est.high,
+      priceLow: est.low, priceHigh: est.high, afterHoursCharge: est.afterHoursFee || null,
       calloutFee: est.calloutFee, travelCharge: est.travelCharge, labour: est.labour, customerLabourHours: form.labourHoursEstimate || null,
       leadTimeDays: form.urgency === "emergency" ? 1 : form.urgency === "priority" ? 2 : 4,
     } : null;
 
     const sent = await onSubmitBooking(record, newQuote);
+    if (sent === "taken") { setForm((f) => ({ ...f, slotStart: "" })); setStep(2); return; } // someone else got the time
     if (sent === false) return; // App already told the user; stay on the form so nothing is lost
     setSubmittedRequestId(id);
   };
@@ -525,6 +537,12 @@ export function BookingFlow({ customer, suppliers, pricingBySupplier, quotes, on
                       <span className="text-neutral-300">Labour{q.labourHours ? ` (${q.labourHours}h @ $${q.hourlyRate}/hr)` : ""}</span>
                       <span className="text-white font-semibold">${q.labour}</span>
                     </div>
+                    {q.afterHoursCharge > 0 && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-neutral-300">After-hours callout fee</span>
+                        <span className="text-white font-semibold">${q.afterHoursCharge}</span>
+                      </div>
+                    )}
                     {q.hoseAssemblyCost > 0 && (
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-neutral-300">Hose assembly / materials</span>
@@ -645,8 +663,8 @@ export function BookingFlow({ customer, suppliers, pricingBySupplier, quotes, on
                 <input placeholder="e.g. john@example.com" className={inputClass(errors.email)} value={form.email} onChange={(e) => update("email", e.target.value)} />
               </Field>
             </div>
-            <Field label="Preferred Date / Time" hint="When would you like the technician to come?">
-              <input placeholder="e.g. Tomorrow morning" className={inputClass()} value={form.preferredTime} onChange={(e) => update("preferredTime", e.target.value)} />
+            <Field label="Anything we should know about timing? (optional)" hint={form.slotStart ? `Your time: ${slotLabel(form.slotStart)}` : form.afterHours && form.afterHoursDate ? `After-hours callout on ${dayLabel(form.afterHoursDate)}` : "e.g. best to call first, gate opens at 7"}>
+              <input placeholder="e.g. Ring me when you're 15 minutes away" className={inputClass()} value={form.preferredTime} onChange={(e) => update("preferredTime", e.target.value)} />
             </Field>
             <Field label="Notes (optional)" hint="Site access, gate codes, parking, etc.">
               <textarea rows={3} className={inputClass()} value={form.notes} onChange={(e) => update("notes", e.target.value)} />
@@ -681,7 +699,7 @@ export function BookingFlow({ customer, suppliers, pricingBySupplier, quotes, on
                 <button
                   type="button"
                   key={pq.supplierId}
-                  onClick={() => update("selectedSupplierId", pq.supplierId)}
+                  onClick={() => { if (!selected) setForm((f) => ({ ...f, selectedSupplierId: pq.supplierId, slotStart: "", afterHoursDate: "", timeOptional: false })); }}
                   className={`w-full rounded-lg px-4 py-3 border transition-colors ${
                     selected ? "border-orange-500 bg-orange-500/10" : "border-transparent bg-black/30 hover:border-neutral-700"
                   }`}
@@ -693,13 +711,33 @@ export function BookingFlow({ customer, suppliers, pricingBySupplier, quotes, on
                     <span className={`text-lg font-extrabold ${selected ? "text-orange-500" : "text-white"}`}>${pq.est.low} – ${pq.est.high}</span>
                   </div>
                   <div className="flex items-center justify-between mt-1 text-xs text-neutral-500">
-                    <span>Callout ${pq.est.calloutFee} + Travel ${pq.est.travelCharge} + Labour ${pq.est.labour} ({pq.est.labourHours}h @ ${pq.est.hourlyRate}/hr)</span>
+                    <span>Callout ${pq.est.calloutFee} + Travel ${pq.est.travelCharge} + Labour ${pq.est.labour} ({pq.est.labourHours}h @ ${pq.est.hourlyRate}/hr){pq.est.afterHoursFee ? ` + After-hours $${pq.est.afterHoursFee}` : ""}</span>
                   </div>
                 </button>
               );
             })}
           </div>
           {errors.selectedSupplierId && <p className="text-xs text-red-400 mt-2">{errors.selectedSupplierId}</p>}
+        </div>
+      )}
+
+      {step === 2 && form.selectedSupplierId && form.urgency !== "emergency" && (
+        <div className="mb-6">
+          <Fragment key={form.selectedSupplierId}>
+            <SlotPicker
+              supplierId={form.selectedSupplierId}
+              afterHoursFee={pricingBySupplier[form.selectedSupplierId]?.afterHoursFee ?? 150}
+              value={{ slotStart: form.slotStart, afterHours: form.afterHours, afterHoursDate: form.afterHoursDate, afterHoursWhen: form.afterHoursWhen }}
+              onChange={(patch) => { setForm((f) => ({ ...f, ...patch })); setErrors((e) => ({ ...e, when: undefined })); }}
+              onUnavailable={(u) => setForm((f) => (f.timeOptional === u ? f : { ...f, timeOptional: u }))}
+              error={errors.when}
+            />
+          </Fragment>
+        </div>
+      )}
+      {step === 2 && form.selectedSupplierId && form.urgency === "emergency" && (
+        <div className="mb-6 rounded-xl border border-neutral-800 bg-neutral-900 p-4 text-sm text-neutral-400">
+          Emergency requests are handled as soon as possible, so there's no time to pick. Choose Standard or Priority above if you'd rather book a time.
         </div>
       )}
 

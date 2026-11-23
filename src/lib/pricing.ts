@@ -93,9 +93,11 @@ export function calcBookingEstimate(form, pricing) {
   const hourlyRate = pricing.labourHourlyRate ?? 85;
   const labourHours = form.labourHoursEstimate ? (parseFloat(form.labourHoursEstimate) || 0) : 1;
   const labour = Math.round(labourHours * hourlyRate);
-  const total = calloutFee + travelCharge + labour;
+  // After-hours callouts carry the supplier's extra fee as its own line.
+  const afterHoursFee = form.afterHours ? Math.round(pricing.afterHoursFee ?? 150) : 0;
+  const total = calloutFee + travelCharge + labour + afterHoursFee;
   return {
-    calloutFee, travelCharge, labour, labourHours, hourlyRate, total,
+    calloutFee, travelCharge, labour, labourHours, hourlyRate, afterHoursFee, total,
     low: Math.round(total * 0.95), high: Math.round(total * 1.05),
   };
 }

@@ -44,6 +44,12 @@ export function JobQuoteCard({ q, req, unlocked, pricing, onUpdateFieldService, 
             <span className="text-neutral-300">Labour{q.labourHours ? ` (${q.labourHours}h @ $${q.hourlyRate}/hr)` : ""}</span>
             <span className="text-white font-semibold">${q.labour}</span>
           </div>
+          {q.afterHoursCharge > 0 && (
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-neutral-300">After-hours callout fee</span>
+              <span className="text-white font-semibold">${q.afterHoursCharge}</span>
+            </div>
+          )}
           <div className="flex items-center justify-between pt-2 border-t border-neutral-700">
             <span className="text-sm font-bold text-orange-500">Total</span>
             <span className="text-lg font-extrabold text-orange-500">${q.priceLow} – ${q.priceHigh}</span>

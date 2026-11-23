@@ -152,6 +152,13 @@ export default function RequestStatus({
                   ? new Date(request.created_at).toLocaleDateString()
                   : ""}
               </p>
+              {request.request_type === "booking" && request.preferred_time && (
+                <p className="text-sm mt-2">
+                  <span className="text-neutral-500">Requested time: </span>
+                  <span className="text-white font-semibold">{request.preferred_time}</span>
+                  {request.after_hours && <span className="block text-amber-400 text-xs mt-0.5">After-hours callout — the supplier will arrange the exact time with you.</span>}
+                </p>
+              )}
             </div>
 
             {Array.isArray(request.assemblies) && request.assemblies.length > 0 && (
@@ -220,6 +227,9 @@ export default function RequestStatus({
                         ? ` – $${Number(q.price_high) + (onSiteExtra(q)?.total ?? 0)}`
                         : ""}
                     </div>
+                    {q.after_hours_charge > 0 && (
+                      <div className="text-xs text-neutral-400 mt-1">Includes an after-hours callout fee of ${Number(q.after_hours_charge)}</div>
+                    )}
                     {onSiteExtra(q) && (
                       <div className="text-xs text-neutral-400 mt-1">
                         Includes on-site: ${onSiteExtra(q)!.callout} callout · ${onSiteExtra(q)!.travel} travel · ${onSiteExtra(q)!.labour} labour

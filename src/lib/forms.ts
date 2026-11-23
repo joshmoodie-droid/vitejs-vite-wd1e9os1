@@ -27,5 +27,9 @@ export function emptyBookingForm() {
     equipmentType: "", issue: "", description: "", labourHoursEstimate: "",
     urgency: "standard", location: "", selectedSupplierId: "",
     name: "", phone: "", email: "", preferredTime: "", notes: "", photoUrl: "", photos: [],
+    // When: a held 2-hour slot (ISO time), or an after-hours callout on a chosen day.
+    slotStart: "", afterHours: false, afterHoursDate: "", afterHoursWhen: "As soon as possible",
+    // True when the supplier's slots couldn't be loaded, so no time is required.
+    timeOptional: false,
   };
 }

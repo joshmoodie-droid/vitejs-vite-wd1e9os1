@@ -133,6 +133,11 @@ async function onRequestCreated(req: any) {
   const kind = req.request_type === "booking" ? "field service booking" : "hose quote request";
   const custNote = fulfillmentNote(req);
   const supNote = fulfillmentSupplierNote(req);
+  // Field service bookings: the time the customer asked for (a held slot, or an
+  // after-hours callout the supplier arranges). Customer-written text, so escaped.
+  const timeNote = req.request_type === "booking" && req.preferred_time
+    ? `<br>Requested time: <b>${esc(req.preferred_time)}</b>${req.after_hours ? " (after-hours callout)" : ""}.`
+    : "";
 
   await sendEmail(
     req.email,
@@ -140,7 +145,7 @@ async function onRequestCreated(req: any) {
     shell(
       `Thanks, ${req.name || "there"} — your request is in`,
       `Your reference is <b>${req.id}</b>. ${supplier ? `It's been sent to a supplier` : "We're matching you to a supplier"}.
-       You'll get an email as soon as there's a quote to review.${custNote ? ` ${custNote}` : ""}`,
+       You'll get an email as soon as there's a quote to review.${custNote ? ` ${custNote}` : ""}${timeNote}`,
       { label: "Track this request", url: customerLink(req) },
     ),
   );
@@ -151,7 +156,7 @@ async function onRequestCreated(req: any) {
     shell(
       `New ${kind}`,
       `A customer (${req.name || "—"}) submitted <b>${req.id}</b> in ${req.location || "an unspecified area"}.
-       Open the supplier portal to price it up.${supNote ? ` ${supNote}` : ""}`,
+       Open the supplier portal to price it up.${supNote ? ` ${supNote}` : ""}${timeNote}`,
       { label: "Open supplier portal", url: supplierLink() },
     ),
   );

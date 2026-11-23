@@ -14,6 +14,7 @@ export function ActiveQuoteEditor({ quote, onSave }: any) {
   const [calloutFee, setCalloutFee] = useState(quote.calloutFee ?? quote.fieldService?.calloutFee ?? 65);
   const [travelCharge, setTravelCharge] = useState(quote.travelCharge ?? quote.fieldService?.travelCharge ?? 45);
   const [labour, setLabour] = useState(quote.labour ?? quote.fieldService?.labour ?? 0);
+  const [afterHoursCharge, setAfterHoursCharge] = useState(quote.afterHoursCharge ?? 0);
 
   const showOnSiteFields = quote.isBooking || (quote.fieldService && quote.fieldService.requested);
 
@@ -27,6 +28,7 @@ export function ActiveQuoteEditor({ quote, onSave }: any) {
       overrides.calloutFee = parseFloat(calloutFee) || 0;
       overrides.travelCharge = parseFloat(travelCharge) || 0;
       overrides.labour = parseFloat(labour) || 0;
+      if (quote.afterHoursCharge > 0) overrides.afterHoursCharge = parseFloat(afterHoursCharge) || 0;
     } else if (quote.fieldService && quote.fieldService.requested) {
       overrides.fieldService = { ...quote.fieldService, calloutFee: parseFloat(calloutFee) || 0, travelCharge: parseFloat(travelCharge) || 0, labour: parseFloat(labour) || 0 };
     }
@@ -59,6 +61,12 @@ export function ActiveQuoteEditor({ quote, onSave }: any) {
             <label className="text-xs text-neutral-500 block mb-1">Labour $</label>
             <input type="number" className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-2 py-2 text-white text-sm" value={labour} onChange={(e) => setLabour(e.target.value)} />
           </div>
+        </div>
+      )}
+      {quote.isBooking && quote.afterHoursCharge > 0 && (
+        <div>
+          <label className="text-xs text-neutral-500 block mb-1">After-hours fee $ (included in the total above)</label>
+          <input type="number" className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-2 py-2 text-white text-sm" value={afterHoursCharge} onChange={(e) => setAfterHoursCharge(e.target.value)} />
         </div>
       )}
       <div>
@@ -141,6 +149,8 @@ export function AutoQuoteReview({ quote, request, pricing, onConfirmQuote, onRej
   const [travelCharge, setTravelCharge] = useState(quote.travelCharge ?? 45);
   const [labourHours, setLabourHours] = useState(quote.customerLabourHours || 1);
   const [hourlyRate, setHourlyRate] = useState(85);
+  const isAfterHours = !!(request?.afterHours || quote.afterHoursCharge > 0);
+  const [afterHoursFee, setAfterHoursFee] = useState(quote.afterHoursCharge ?? pricing?.afterHoursFee ?? 150);
 
   // Recompute the same itemized breakdown used to auto-generate this quote
   // (hose+fittings, labour, travel, delivery) so the supplier is editing real
@@ -156,12 +166,14 @@ export function AutoQuoteReview({ quote, request, pricing, onConfirmQuote, onRej
 
   if (quote.isBooking) {
     const labour = Math.round((parseFloat(labourHours) || 0) * (parseFloat(hourlyRate) || 0));
-    const total = (parseFloat(calloutFee) || 0) + (parseFloat(travelCharge) || 0) + labour;
+    const afterHours = isAfterHours ? (parseFloat(afterHoursFee) || 0) : 0;
+    const total = (parseFloat(calloutFee) || 0) + (parseFloat(travelCharge) || 0) + labour + afterHours;
     const confirm = () => {
       onConfirmQuote(quote.id, {
         calloutFee: parseFloat(calloutFee) || 0,
         travelCharge: parseFloat(travelCharge) || 0,
         labour,
+        ...(isAfterHours ? { afterHoursCharge: afterHours } : {}),
         priceLow: total,
         priceHigh: total,
         leadTimeDays: parseInt(leadTime) || 1,
@@ -197,6 +209,12 @@ export function AutoQuoteReview({ quote, request, pricing, onConfirmQuote, onRej
             </div>
           </div>
         </div>
+        {isAfterHours && (
+          <div>
+            <label className="text-xs text-neutral-500 block mb-1">After-hours callout fee $</label>
+            <input type="number" className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-2 py-2 text-white text-sm" value={afterHoursFee} onChange={(e) => setAfterHoursFee(e.target.value)} />
+          </div>
+        )}
         <div>
           <label className="text-xs text-neutral-500 block mb-1">Lead time (days)</label>
           <input type="number" className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-2 py-2 text-white text-sm" value={leadTime} onChange={(e) => setLeadTime(e.target.value)} />

@@ -16,6 +16,7 @@ export function requestFromRow(r) {
     name: r.name, phone: r.phone, email: r.email, preferredTime: r.preferred_time, notes: r.notes, photoUrl: r.photo_url, photos: r.photos || [],
     assemblies: r.assemblies || [], equipmentType: r.equipment_type, issue: r.issue, description: r.description,
     labourHoursEstimate: r.labour_hours_estimate, createdAt: r.created_at,
+    scheduledStart: r.scheduled_start ?? null, afterHours: !!r.after_hours,
   };
 }
 export function quoteFromRow(r) {
@@ -25,6 +26,7 @@ export function quoteFromRow(r) {
     status: r.status, calloutFee: r.callout_fee, travelCharge: r.travel_charge, labour: r.labour,
     hoseAssemblyCost: r.hose_assembly_cost, deliveryCharge: r.delivery_charge, customerLabourHours: r.customer_labour_hours,
     fieldService: r.field_service, createdAt: r.created_at, completedAt: r.completed_at,
+    afterHoursCharge: r.after_hours_charge ?? null,
   };
 }
 export function connectionFromRow(r) {
