@@ -17,6 +17,7 @@
 //   - create_request rejects a machine_id the caller doesn't own (0013)
 //   - create_request accepts a field service booking that omits fulfillment (0024)
 //   - supplier_schedule / supplier_days_off -> no anon access; anon can't call save_supplier_schedule (0025)
+//   - supplier calendar functions (supplier_slots, block_time, release_block, move_booking, arrange_time) -> not callable by anon (0027)
 //   - appointments -> no anon access; anon can list free slots and book one, and a second booking
 //     of the same slot is refused (0026)
 //   - the `photos` storage bucket: no anon upload, no public reads (0014)
@@ -447,6 +448,25 @@ if (realSupplier) {
     try { afterSlots = await after.json(); } catch { /* non-JSON */ }
     const mine = Array.isArray(afterSlots) ? afterSlots.find((s) => s.slot_start === slot.slot_start) : null;
     check("a booked slot shows as taken", !!mine && mine.free === false, `slot after booking: ${JSON.stringify(mine)}`);
+  }
+}
+
+// --- 13. calendar actions need a signed-in supplier or admin (0027) ---------
+{
+  const Z = "00000000-0000-0000-0000-000000000000";
+  for (const [fn, body] of [
+    ["supplier_slots", { p_supplier_id: realSupplier?.id ?? Z, p_from: "2030-01-01", p_to: "2030-01-02" }],
+    ["block_time", { p_supplier_id: realSupplier?.id ?? Z, p_starts_at: "2030-01-01T00:00:00Z", p_ends_at: "2030-01-02T00:00:00Z", p_note: marker }],
+    ["release_block", { p_appointment_id: Z }],
+    ["move_booking", { p_request_id: "HQ-NONE", p_new_start: "2030-01-01T09:00:00+10:00" }],
+    ["arrange_time", { p_request_id: "HQ-NONE", p_start: "2030-01-01T18:00:00+10:00", p_end: "2030-01-01T20:00:00+10:00" }],
+  ]) {
+    const res = await api(`/rpc/${fn}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    check(`anon cannot call ${fn}`, !res.ok, `${fn} answered ${res.status} for anon`);
   }
 }
 

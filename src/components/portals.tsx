@@ -3,7 +3,7 @@
 // RequestCard / JobQuoteCard lists; AdminPortal also hosts AdminSuppliers.
 
 import { useState } from "react";
-import { LogOut, Wrench, Settings, Building2, ClipboardCheck, BadgePercent, MessageCircleQuestion, CalendarDays } from "lucide-react";
+import { LogOut, Wrench, Settings, Building2, ClipboardCheck, BadgePercent, MessageCircleQuestion, CalendarDays, CalendarClock } from "lucide-react";
 import { RequestCard, JobQuoteCard } from "./portalCards";
 import { PricingAdmin } from "./PricingAdmin";
 import { AdminSuppliers } from "./AdminSuppliers";
@@ -12,6 +12,7 @@ import { CommissionAdmin } from "./CommissionAdmin";
 import { SupplierEnquiries } from "./enquiries/SupplierEnquiries";
 import { useSupplierInquiries } from "./enquiries/useSupplierInquiries";
 import { SupplierSchedule, AdminSchedule } from "./schedule/SupplierSchedule";
+import { SupplierCalendar, AdminCalendar } from "./schedule/SupplierCalendar";
 import { isUnread } from "../lib/inquiries";
 import { currentRoute } from "../lib/routes";
 import { dollars, percent, rateFor } from "../lib/commission";
@@ -80,7 +81,8 @@ export function SupplierPortal({ supplier, authUserId, onLogout, requests, quote
           { key: "jobs", label: "Jobs", icon: Wrench },
           { key: "audits", label: "Audits", icon: ClipboardCheck },
           { key: "enquiries", label: "Enquiries", icon: MessageCircleQuestion, count: unreadEnquiries },
-          { key: "schedule", label: "Schedule", icon: CalendarDays },
+          { key: "calendar", label: "Calendar", icon: CalendarClock },
+          { key: "schedule", label: "Hours", icon: CalendarDays },
           { key: "pricing", label: "Pricing", icon: Settings },
         ].map((t) => (
           <button key={t.key} onClick={() => setTab(t.key)} className={`flex-1 min-w-fit px-2.5 whitespace-nowrap py-2 rounded-md font-semibold text-xs sm:text-sm transition-colors flex items-center justify-center gap-1.5 ${tab === t.key ? "bg-orange-500 text-black" : "text-neutral-400"}`}>
@@ -177,6 +179,8 @@ export function SupplierPortal({ supplier, authUserId, onLogout, requests, quote
         <SupplierEnquiries userId={authUserId} inquiries={enquiries.inquiries} loadError={enquiries.error} onReload={enquiries.reload} initialOpenId={enquiryLink()?.enquiryId ?? null} />
       )}
 
+      {tab === "calendar" && <SupplierCalendar supplierId={supplier.id} requests={requests} quotes={quotes} onReload={onReload} />}
+
       {tab === "schedule" && <SupplierSchedule supplierId={supplier.id} afterHoursFee={pricing?.afterHoursFee} />}
 
       {tab === "pricing" && <PricingAdmin pricing={pricing} onSave={onSavePricing} />}
@@ -235,7 +239,8 @@ export function AdminPortal({
           { key: "jobs", label: "Jobs", icon: Wrench },
           { key: "audits", label: "Audits", icon: ClipboardCheck },
           { key: "enquiries", label: "Enquiries", icon: MessageCircleQuestion, count: unreadEnquiries },
-          { key: "schedule", label: "Schedule", icon: CalendarDays },
+          { key: "calendar", label: "Calendar", icon: CalendarClock },
+          { key: "schedule", label: "Hours", icon: CalendarDays },
           { key: "suppliers", label: "Suppliers", icon: Building2 },
           { key: "commission", label: "Commission", icon: BadgePercent },
         ].map((t) => (
@@ -252,6 +257,8 @@ export function AdminPortal({
       {tab === "enquiries" && (
         <SupplierEnquiries userId={authUserId} inquiries={enquiries.inquiries} loadError={enquiries.error} onReload={enquiries.reload} showSupplier initialOpenId={enquiryLink()?.enquiryId ?? null} />
       )}
+
+      {tab === "calendar" && <AdminCalendar suppliers={suppliers} requests={requests} quotes={quotes} onReload={onReload} />}
 
       {tab === "schedule" && <AdminSchedule suppliers={suppliers} pricingBySupplier={pricingBySupplier} />}
 
