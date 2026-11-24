@@ -518,8 +518,9 @@ export default function HoseQuoteApp() {
 
   const savePricingFor = async (supplierId, next) => {
     const res = await supabase.from("supplier_pricing").update(pricingToRow(next)).eq("supplier_id", supplierId).select("supplier_id");
-    if (!wrote(res)) { fail("Couldn't save the pricing — please try again.", res.error); return; }
+    if (!wrote(res)) { fail("Couldn't save the pricing — please try again.", res.error); return false; }
     setPricingBySupplier((p) => ({ ...p, [supplierId]: next }));
+    return true;
   };
 
   const submitManualQuote = async (requestId, supplierId, priceLow, priceHigh, leadTimeDays) => {

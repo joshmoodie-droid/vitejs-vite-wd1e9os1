@@ -43,7 +43,6 @@ export function CustomerFlow({ form, update, errors, step, next, back, submit, u
     .map((s) => ({ supplierId: s.id, est: calcEstimate(form, pricingBySupplier[s.id]) }))
     .filter((pq) => pq.est)
     .sort((a, b) => a.est.low - b.est.low);
-  const selectedSupplierName = suppliers.find((s) => s.id === form.selectedSupplierId)?.companyName;
   if (submittedRequestId) {
     const myQuotes = quotes.filter((q) => q.requestId === submittedRequestId && q.status !== "declined").sort((a, b) => a.priceLow - b.priceLow);
     const accepted = myQuotes.find((q) => q.status === "accepted" || q.status === "completed");
@@ -55,11 +54,6 @@ export function CustomerFlow({ form, update, errors, step, next, back, submit, u
           </div>
           <h2 className="text-2xl font-extrabold text-white mb-1">Request sent</h2>
           <p className="text-neutral-400">Reference <span className="text-orange-500 font-mono">{submittedRequestId}</span></p>
-          {selectedSupplierName && (
-            <p className="text-xs text-amber-500/80 mt-3 border-t border-neutral-800 pt-3">
-              🛠 Testing note (not shown to real customers): this went to <strong>{selectedSupplierName}</strong> — log into the Supplier Portal as this company to confirm it.
-            </p>
-          )}
         </div>
 
         <div className="text-white font-bold mb-3">
