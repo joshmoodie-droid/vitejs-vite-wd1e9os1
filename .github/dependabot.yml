@@ -6,6 +6,11 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 5
+    ignore:
+      # CI and Vercel run Node 22. Node 26's types would let code use APIs the
+      # runtime doesn't have, so stay on the 20.x line's types for now.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
     groups:
       # roll routine minor/patch bumps into one PR a week; majors still get
       # their own PR so they can be reviewed on their own.

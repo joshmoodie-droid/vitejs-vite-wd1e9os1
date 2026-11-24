@@ -15,7 +15,16 @@ if (dsn) {
   Sentry.init({
     dsn,
     environment: import.meta.env.MODE,
-    sendDefaultPii: false,
+    // Sentry 11 replaced `sendDefaultPii: false` with `dataCollection`. Keep it as private as
+    // before: no user fields (IP etc.), cookies or headers, and no URL query strings — our
+    // /r/ and /a/ email links carry an access token in `?t=`.
+    dataCollection: {
+      userInfo: false,
+      cookies: false,
+      httpHeaders: false,
+      urlQueryParams: false,
+      httpBodies: [],
+    },
     // errors only for now — no performance tracing (keeps the free-tier quota
     // for what matters).
     tracesSampleRate: 0,
