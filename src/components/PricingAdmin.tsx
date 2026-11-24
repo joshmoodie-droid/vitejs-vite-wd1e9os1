@@ -51,6 +51,7 @@ export function PricingAdmin({ pricing, onSave }: any) {
   useEffect(() => setLocal(pricing), [pricing]);
 
   const updateItem = (group, key, field, value) => {
+    setSaved(false);
     setLocal((p) => ({ ...p, [group]: { ...p[group], [key]: { ...p[group][key], [field]: field === "price" ? (parseFloat(value) || 0) : value } } }));
   };
 
@@ -59,7 +60,14 @@ export function PricingAdmin({ pricing, onSave }: any) {
     setLocal((p) => ({ ...p, [group]: { ...p[group], [key]: { label, price: parseFloat(price) || 0, partNumber: partNumber || "" } } }));
   };
 
-  const save = async () => { setSaving(true); await onSave(local); setSaving(false); };
+  const [saved, setSaved] = useState(false);
+  const save = async () => {
+    setSaving(true);
+    setSaved(false);
+    const ok = await onSave(local);
+    setSaving(false);
+    if (ok !== false) setSaved(true);
+  };
 
   if (!local) return null;
 
@@ -104,6 +112,7 @@ export function PricingAdmin({ pricing, onSave }: any) {
       <button onClick={save} disabled={saving} className="bg-orange-500 hover:bg-orange-600 text-black font-bold px-6 py-3 rounded-lg transition-colors disabled:opacity-50">
         {saving ? "Saving..." : "Save changes"}
       </button>
+      {saved && <span role="status" className="ml-3 text-emerald-400 text-sm">Pricing saved.</span>}
     </div>
   );
 }
